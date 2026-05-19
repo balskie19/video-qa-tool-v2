@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: video-qa-analyzer
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: MODEL
+        value: anthropic/claude-sonnet-4-5
+      - key: WHISPER_MODEL_SIZE
+        value: base
+    healthCheckPath: /
+    autoDeploy: true
