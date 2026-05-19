@@ -466,10 +466,18 @@ function copyIssueText(issue) {
 function _extractUrlLabel(url) {
   try {
     const u = new URL(url);
-    // Replay: replay.dropbox.com/share/SHAREID → use share ID
     const parts = u.pathname.split("/").filter(Boolean);
     const last = parts[parts.length - 1];
-    if (last && last.length > 3) return last;
+    // For Replay links the last path segment is an opaque hash — label it clearly
+    if (u.hostname.includes("replay.dropbox.com")) {
+      return `Dropbox Replay (${last.slice(0, 8)}...)`;
+    }
+    // Standard Dropbox share link — last path segment is the filename
+    if (u.hostname.includes("dropbox.com")) {
+      const name = decodeURIComponent(last);
+      if (name && name.length > 3) return name;
+    }
+    if (last && last.length > 3) return decodeURIComponent(last);
     return u.hostname;
   } catch (_) {
     return url.slice(0, 60);

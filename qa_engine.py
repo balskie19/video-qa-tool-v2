@@ -200,10 +200,26 @@ def _download_replay_playwright(url: str, tmp_dir: str) -> tuple:
             pass
 
         try:
+            # Wait up to 8s for the title to contain the actual video name (not just "Dropbox Replay")
+            try:
+                page.wait_for_function(
+                    "document.title && document.title.length > 20 && !document.title.startsWith('Dropbox')",
+                    timeout=8_000
+                )
+            except Exception:
+                pass
             title = page.title()
+            print(f"[DEBUG] Replay page title: {title!r}")
+            # Strip "- Dropbox Replay" / "| Replay" suffix and " MP4" suffix from Dropbox titles
             clean = re.sub(r'\s*[-|]\s*(Dropbox\s*Replay|Replay).*$', '', title, flags=re.IGNORECASE).strip()
-            display_name = (clean + ".mp4") if clean and len(clean) > 3 else f"replay_{share_id}.mp4"
-        except Exception:
+            clean = re.sub(r'\s+MP4\s*$', '', clean, flags=re.IGNORECASE).strip()
+            # Treat "Dropbox Replay" or very short cleaned titles as failures
+            if clean and len(clean) > 5 and "dropbox" not in clean.lower():
+                display_name = clean + ".mp4"
+            else:
+                display_name = f"replay_{share_id}.mp4"
+        except Exception as e:
+            print(f"[DEBUG] Replay title extraction failed: {e}")
             display_name = f"replay_{share_id}.mp4"
 
         browser.close()
