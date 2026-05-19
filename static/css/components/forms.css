@@ -46,13 +46,44 @@
 
 .input-row {
   display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.input-row-main {
+  display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.input-row .text-input {
+.input-row-main .text-input {
   flex: 1;
   min-width: 0;
+}
+
+.url-label-input {
+  width: 100%;
+  padding: 6px var(--space-7);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-sm);
+  color: var(--color-surface-base);
+  background: rgba(0, 0, 0, 0.025);
+  outline: none;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+.url-label-input:hover {
+  border-color: rgba(107, 72, 255, 0.35);
+}
+.url-label-input:focus {
+  border-color: var(--color-border-strong);
+  box-shadow: 0 0 0 2px rgba(107, 72, 255, 0.15);
+  background: #fff;
+}
+.url-label-input::placeholder {
+  color: rgba(0, 0, 0, 0.28);
+  font-style: italic;
 }
 
 /* ── Remove Row Button ── */
@@ -111,6 +142,7 @@
 
 /* ── File Pick Area (per-row) ── */
 .file-input-row {
+  flex-direction: row;
   align-items: stretch;
 }
 .file-pick-area {

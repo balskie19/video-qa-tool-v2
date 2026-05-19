@@ -66,14 +66,23 @@ function addUrlRow(value = "") {
   row.className = "input-row";
   row.id = id;
   row.innerHTML = `
+    <div class="input-row-main">
+      <input
+        type="url"
+        class="text-input url-single-input"
+        placeholder="https://replay.dropbox.com/share/..."
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button class="btn-remove-row" type="button" aria-label="Remove this link">&times;</button>
+    </div>
     <input
-      type="url"
-      class="text-input url-single-input"
-      placeholder="https://replay.dropbox.com/share/..."
+      type="text"
+      class="url-label-input"
+      placeholder="Video name (optional — used in report)"
       autocomplete="off"
       spellcheck="false"
     />
-    <button class="btn-remove-row" type="button" aria-label="Remove this link">&times;</button>
   `;
   if (value) row.querySelector(".url-single-input").value = value;
   row.querySelector(".btn-remove-row").addEventListener("click", () => {
@@ -182,9 +191,12 @@ btnAnalyze.addEventListener("click", startAnalysis);
 
 async function startAnalysis() {
   if (activeTab === "url") {
-    const inputs = urlList.querySelectorAll(".url-single-input");
-    const urls = Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
-    if (!urls.length) {
+    const rows = urlList.querySelectorAll(".input-row");
+    const items = Array.from(rows).map(row => ({
+      url: (row.querySelector(".url-single-input")?.value || "").trim(),
+      label: (row.querySelector(".url-label-input")?.value || "").trim(),
+    })).filter(i => i.url);
+    if (!items.length) {
       const first = urlList.querySelector(".url-single-input");
       if (first) {
         first.focus();
@@ -193,7 +205,7 @@ async function startAnalysis() {
       }
       return;
     }
-    _queue = urls.map(u => ({ type: "url", value: u }));
+    _queue = items.map(i => ({ type: "url", value: i.url, label: i.label }));
   } else {
     const files = Object.values(_fileRowData);
     if (!files.length) {
@@ -269,10 +281,15 @@ async function runSingleAnalysis(item) {
         if (!json) continue;
         try {
           const evt = JSON.parse(json);
-          if (evt.type === "complete" && !evt.report?.filename) {
-            evt.report.filename = item.type === "file"
-              ? item.value.name
-              : _extractUrlLabel(item.value);
+          if (evt.type === "complete") {
+            // User-supplied label wins; then backend name; then URL-derived fallback
+            if (item.label) {
+              evt.report.filename = item.label;
+            } else if (!evt.report?.filename) {
+              evt.report.filename = item.type === "file"
+                ? item.value.name
+                : _extractUrlLabel(item.value);
+            }
           }
           handleEvent(evt);
         } catch (_) {}
