@@ -1,0 +1,23 @@
+{
+  "agent": "Visual",
+  "checks": [
+    "Glitch: footage that flickers, pops in, or disappears for a single frame. Look carefully at every frame for sudden scene changes, flashes, or content that appears briefly then cuts away. Even a half-second appearance of wrong footage counts as a glitch.",
+    "Black screen — check every frame, especially the very last frame of the video",
+    "Dead air: a period of COMPLETE silence with no voice AND no background music. Flag all dead_air entries from the audio data.",
+    "Inter-sentence pause: a gap of silence between spoken sentences where the voice stops but music may still be present (music_gap entries). Flag any music_gap longer than 1.0 seconds — these are pauses between lines that should be trimmed to keep the video short and engaging.",
+    "Audio crackling or distortion: any point where the audio sounds rough, crackly, popping, or distorted — even subtly. The audio data will flag obvious clipping but listen carefully to the transcript timestamps for any crackling. Flag with exact timestamp.",
+    "Audio inconsistency: check whether the audio volume or quality changes noticeably between different parts of the video. Flag if the audio sounds louder in one section and quieter in another, if background noise suddenly increases or drops, or if the recording quality changes mid-video. Use the loudness data to detect sudden level jumps between segments.",
+    "Black lines: horizontal or vertical artifact lines at frame edges or across the image",
+    "Jarring jump cut or abrupt scene break with no transition",
+    "Off-centered text, logo, or graphic overlay: inspect every frame that contains an overlay, lower third, caption box, logo, or on-screen graphic. Flag if any element appears visually off-center relative to the frame or its expected position — e.g., a title card shifted left/right, a logo too close to one edge, or a lower third that is not horizontally balanced. Do not skip this check — overlay positioning must be verified for every frame where an element is present.",
+    "Misaligned graphic element",
+    "Endcard missing or incorrect: check the last 3-5 seconds of the video for a proper endcard. Flag if the video ends abruptly with no endcard, or if the endcard appears to be missing a logo, handle, or call-to-action that should be present.",
+    "Branding absent: scan the full video for client logo or brand identifier. Flag if no logo or branding element appears at any point during the video."
+  ],
+  "do_not_flag": [
+    "Music gaps under 1.0 second — very brief pauses are natural",
+    "Natural breath pauses mid-sentence",
+    "Subtle alignment differences you are not confident about",
+    "Anything you cannot confirm from the frames or audio data provided"
+  ]
+}

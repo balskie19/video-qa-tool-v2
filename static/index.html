@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video QA Analyzer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/tokens.css" />
+  <link rel="stylesheet" href="/static/css/base.css" />
+  <link rel="stylesheet" href="/static/css/typography.css" />
+  <link rel="stylesheet" href="/static/css/components/nav.css" />
+  <link rel="stylesheet" href="/static/css/components/buttons.css" />
+  <link rel="stylesheet" href="/static/css/components/cards.css" />
+  <link rel="stylesheet" href="/static/css/components/forms.css" />
+  <link rel="stylesheet" href="/static/css/components/badges.css" />
+  <link rel="stylesheet" href="/static/css/utilities.css" />
+</head>
+<body>
+
+  <a href="#main-content" class="skip-link">Skip to content</a>
+
+  <!-- Header -->
+  <header class="site-header" role="banner">
+    <div class="header-inner">
+      <div class="logo" aria-label="Video QA Analyzer home">
+        <div class="logo-icon" aria-hidden="true">&#9654;</div>
+        <span class="logo-text">Video QA</span>
+      </div>
+      <span class="header-tag">Internal Tool</span>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="main" id="main-content" role="main">
+
+    <!-- Input Card -->
+    <section class="card input-card" id="input-card" aria-label="Video analysis input">
+      <h2 class="card-title">Analyze Videos</h2>
+      <p class="card-sub">Paste one or more links, or upload multiple files. Videos are processed one at a time.</p>
+
+      <!-- Tabs -->
+      <div class="tabs" role="tablist" aria-label="Input method">
+        <button class="tab active" role="tab" aria-selected="true" aria-controls="panel-url" data-tab="url">Dropbox Links</button>
+        <button class="tab" role="tab" aria-selected="false" aria-controls="panel-upload" data-tab="upload">Upload Files</button>
+      </div>
+
+      <!-- URL Panel -->
+      <div class="tab-panel" id="panel-url" role="tabpanel">
+        <div class="input-list" id="url-list"></div>
+        <button class="btn-add-row" id="btn-add-url" type="button">
+          <span aria-hidden="true">+</span> Add Another Link
+        </button>
+      </div>
+
+      <!-- Upload Panel -->
+      <div class="tab-panel hidden" id="panel-upload" role="tabpanel">
+        <div class="input-list" id="file-list"></div>
+        <button class="btn-add-row" id="btn-add-file" type="button">
+          <span aria-hidden="true">+</span> Add Another File
+        </button>
+      </div>
+
+      <!-- Context Input -->
+      <div class="script-section">
+        <button class="script-toggle" id="script-toggle" aria-expanded="false" aria-controls="script-panel" type="button">
+          <span class="script-toggle-icon" aria-hidden="true">&#43;</span>
+          <span class="script-toggle-label">Add Context</span>
+          <span class="script-toggle-hint">(optional)</span>
+        </button>
+        <div class="script-panel hidden" id="script-panel">
+          <label for="script-input" class="sr-only">Additional context for AI analysis</label>
+          <textarea
+            id="script-input"
+            class="script-textarea"
+            placeholder="Paste anything that helps the AI — script, client brief, brand guidelines, known issues from previous rounds, things to look out for, etc."
+            rows="6"
+            spellcheck="false"
+          ></textarea>
+        </div>
+      </div>
+
+      <button class="btn-analyze" id="btn-analyze" aria-live="polite">
+        <span class="btn-label" id="btn-label">Run QA Analysis</span>
+        <span class="btn-spinner" aria-hidden="true"></span>
+      </button>
+    </section>
+
+    <!-- Progress Card -->
+    <section class="card progress-card hidden" id="progress-card" aria-label="Analysis progress" aria-live="polite">
+      <div class="progress-meta">
+        <span class="progress-counter hidden" id="progress-counter"></span>
+        <span class="progress-elapsed" id="progress-elapsed">0:00</span>
+      </div>
+      <div class="progress-top">
+        <span class="progress-step" id="progress-step">Preparing...</span>
+        <span class="progress-pct" id="progress-pct">0%</span>
+      </div>
+      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-track">
+        <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+      </div>
+    </section>
+
+    <!-- Results List — reports append here -->
+    <div id="results-list" aria-live="polite"></div>
+
+    <!-- Completion Banner -->
+    <div class="completion-banner hidden" id="completion-banner" role="alert">
+      <span class="completion-icon" aria-hidden="true">&#10003;</span>
+      <span id="completion-text">Analysis complete</span>
+      <button class="btn-reset" id="btn-reset">&#8635; Analyze More</button>
+    </div>
+
+  </main>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>

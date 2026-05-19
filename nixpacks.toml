@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["ffmpeg"]
+
+[phases.build]
+cmds = ["python -m playwright install chromium --with-deps"]
+
+[start]
+cmd = "uvicorn app:app --host 0.0.0.0 --port $PORT"

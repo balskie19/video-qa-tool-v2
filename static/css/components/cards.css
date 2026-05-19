@@ -1,0 +1,248 @@
+/* ── Layout ── */
+.main {
+  max-width: 760px;
+  margin: 40px auto;
+  padding: 0 24px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Base Card ── */
+.card {
+  background: var(--color-surface-strong);
+  border-radius: var(--radius-md);
+  border-top: 3px solid var(--color-border-strong);
+  box-shadow: var(--shadow-1);
+  padding: 28px;
+  overflow: hidden;
+  transition:
+    box-shadow var(--duration-normal),
+    transform var(--duration-normal);
+}
+.card:focus-within {
+  outline: 2px solid var(--color-border-strong);
+  outline-offset: 2px;
+}
+
+.card-title {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--color-surface-base);
+  margin-bottom: var(--space-3);
+}
+
+.card-sub {
+  font-size: var(--font-size-md);
+  color: rgba(0, 0, 0, 0.55);
+  margin-bottom: 22px;
+}
+
+/* ── Progress Meta (counter + elapsed) ── */
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.progress-counter {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-border-strong);
+  letter-spacing: 0.02em;
+}
+.progress-counter.hidden { display: none; }
+.progress-elapsed {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.45);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+/* ── Completion Banner ── */
+.completion-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  background: rgba(5, 150, 105, 0.08);
+  border: 1.5px solid rgba(5, 150, 105, 0.3);
+  border-radius: var(--radius-xs);
+  padding: 16px 20px;
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  color: var(--color-surface-base);
+}
+.completion-banner.hidden { display: none; }
+.completion-icon {
+  font-size: 20px;
+  color: var(--color-ok);
+  flex-shrink: 0;
+}
+
+/* ── Progress Card ── */
+.progress-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.progress-step {
+  font-weight: 500;
+  font-size: var(--font-size-md);
+  color: var(--color-surface-base);
+}
+.progress-pct {
+  font-weight: 700;
+  color: var(--color-border-strong);
+  font-size: var(--font-size-md);
+}
+.progress-track {
+  height: 8px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-border-strong), var(--color-text-inverse));
+  border-radius: var(--radius-xl);
+  transition: width 0.4s ease;
+}
+
+/* ── Results Card ── */
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 16px;
+}
+.report-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--color-border-strong);
+  margin-bottom: var(--space-2);
+}
+
+.report-title {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--color-surface-base);
+  margin-bottom: var(--space-3);
+  word-break: break-word;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.report-file-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.summary-text {
+  color: rgba(0, 0, 0, 0.55);
+  font-size: var(--font-size-md);
+  margin-top: var(--space-3);
+}
+
+/* ── Issues Grid ── */
+.issues-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.issue-item {
+  border-radius: var(--radius-xs);
+  padding: 14px 16px;
+  border-left: 4px solid transparent;
+}
+.issue-item.sev-Critical {
+  background: var(--color-critical-bg);
+  border-left-color: var(--color-critical);
+}
+.issue-item.sev-Major {
+  background: var(--color-major-bg);
+  border-left-color: var(--color-major);
+}
+.issue-item.sev-Minor {
+  background: var(--color-minor-bg);
+  border-left-color: var(--color-minor);
+}
+
+.issue-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+.issue-title {
+  font-weight: 600;
+  font-size: var(--font-size-md);
+  color: var(--color-surface-base);
+}
+.issue-ts {
+  font-size: var(--font-size-sm);
+  color: rgba(0, 0, 0, 0.45);
+  font-weight: 500;
+  white-space: nowrap;
+  margin-left: auto;
+  margin-right: var(--space-3);
+}
+.issue-desc {
+  font-size: var(--font-size-md);
+  color: rgba(0, 0, 0, 0.65);
+  line-height: 1.5;
+}
+
+/* ── Category Header ── */
+.category-header {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--color-border-strong);
+  margin-top: 20px;
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid rgba(107, 72, 255, 0.2);
+}
+.category-header:first-child {
+  margin-top: 0;
+}
+
+/* ── No Issues State ── */
+.no-issues {
+  text-align: center;
+  padding: 40px 20px;
+  color: rgba(0, 0, 0, 0.45);
+}
+.no-issues-icon {
+  font-size: 40px;
+  margin-bottom: 10px;
+  color: var(--color-ok);
+}
+.no-issues-title {
+  font-weight: 700;
+  font-size: var(--font-size-xl);
+  color: var(--color-surface-base);
+  margin-bottom: var(--space-3);
+}
+
+/* ── Error Banner ── */
+.error-banner {
+  background: var(--color-critical-bg);
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-xs);
+  padding: 14px 16px;
+  color: var(--color-critical);
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  margin-top: 12px;
+}

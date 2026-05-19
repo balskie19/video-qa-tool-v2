@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-multipart
+openai
+python-dotenv
+yt-dlp
+openai-whisper
+requests
+Pillow
+playwright

@@ -1,0 +1,31 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Dev utilities
+find_token.py
+debug_frames/
+run_test.py
+
+# Runtime
+logs/*.jsonl
+logs/*.log
+tmp/
+*.tmp
+
+# Claude Code
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db

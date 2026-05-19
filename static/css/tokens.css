@@ -1,0 +1,61 @@
+:root {
+  /* ── Colors ── */
+  --color-surface-base:   #000000;
+  --color-text-secondary: #ffffff;
+  --color-border-strong:  #6b48ff;
+  --color-text-inverse:   #1ce3cf;
+  --color-surface-strong: #f2f0f2;
+
+  /* Severity (used inside light cards) */
+  --color-critical:       #dc2626;
+  --color-critical-bg:    #fef2f2;
+  --color-major:          #d97706;
+  --color-major-bg:       #fffbeb;
+  --color-minor:          #2563eb;
+  --color-minor-bg:       #eff6ff;
+  --color-ok:             #059669;
+  --color-ok-bg:          #ecfdf5;
+
+  /* ── Typography ── */
+  --font-family-primary: 'Poppins', sans-serif;
+  --font-size-base:      20.4px;
+  --font-weight-base:    400;
+  --line-height-base:    30.6px;
+
+  --font-size-sm:   17px;
+  --font-size-md:   18.7px;
+  --font-size-lg:   20.4px;
+  --font-size-xl:   22.1px;
+  --font-size-2xl:  23.8px;
+  --font-size-3xl:  25.5px;
+  --font-size-4xl:  40.8px;
+
+  /* ── Spacing ── */
+  --space-1: 1px;
+  --space-2: 2.04px;
+  --space-3: 6px;
+  --space-4: 8.78px;
+  --space-5: 11.05px;
+  --space-6: 14px;
+  --space-7: 16.8px;
+  --space-8: 17px;
+
+  /* ── Border Radius ── */
+  --radius-xs: 19.6px;
+  --radius-sm: 25.2px;
+  --radius-md: 33.6px;
+  --radius-lg: 50px;
+  --radius-xl: 300px;
+
+  /* ── Shadows ── */
+  --shadow-1: rgba(0,0,0,0.09) 0px 7px 28px 0px, rgba(0,0,0,0.05) 0px 1.4px 5.6px 0px;
+  --shadow-2: rgba(0,0,0,0.13) 0px 11.2px 42px 0px, rgba(0,0,0,0.07) 0px 1.4px 8.4px 0px;
+  --shadow-3: rgba(0,0,0,0.15) 0px 2px 12px 0px;
+  --shadow-4: rgba(0,0,0,0.26) 0px 16.8px 50.4px 0px;
+
+  /* ── Motion ── */
+  --duration-instant: 100ms;
+  --duration-fast:    140ms;
+  --duration-normal:  150ms;
+  --duration-slow:    900ms;
+}

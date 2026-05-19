@@ -1,0 +1,348 @@
+/* ── Tabs ── */
+.tabs {
+  display: flex;
+  gap: var(--space-2);
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  margin-bottom: 18px;
+  width: fit-content;
+}
+.tab {
+  background: none;
+  border: none;
+  padding: var(--space-4) 20px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+.tab.active {
+  background: var(--color-surface-strong);
+  color: var(--color-surface-base);
+  box-shadow: var(--shadow-3);
+}
+.tab:not(.active):hover {
+  color: var(--color-surface-base);
+}
+.tab:focus-visible {
+  outline: 2px solid var(--color-border-strong);
+  outline-offset: 2px;
+}
+
+/* ── Tab Panels ── */
+.tab-panel.hidden { display: none; }
+
+/* ── Input Row List ── */
+.input-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-row .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Remove Row Button ── */
+.btn-remove-row {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: 1.5px solid rgba(0, 0, 0, 0.18);
+  border-radius: var(--radius-xs);
+  font-size: 18px;
+  line-height: 1;
+  color: rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color var(--duration-fast), color var(--duration-fast), background var(--duration-fast);
+}
+.btn-remove-row:hover {
+  border-color: var(--color-critical);
+  color: var(--color-critical);
+  background: rgba(220, 38, 38, 0.06);
+}
+.btn-remove-row:focus-visible {
+  outline: 2px solid var(--color-border-strong);
+  outline-offset: 2px;
+}
+.btn-remove-row.hidden { display: none; }
+
+/* ── Add Row Button ── */
+.btn-add-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: none;
+  border: 1.5px dashed rgba(107, 72, 255, 0.35);
+  border-radius: var(--radius-xs);
+  padding: var(--space-4) var(--space-6);
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-border-strong);
+  cursor: pointer;
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+  margin-bottom: 4px;
+}
+.btn-add-row:hover {
+  border-color: var(--color-border-strong);
+  background: rgba(107, 72, 255, 0.05);
+}
+.btn-add-row:focus-visible {
+  outline: 2px solid var(--color-border-strong);
+  outline-offset: 2px;
+}
+
+/* ── File Pick Area (per-row) ── */
+.file-input-row {
+  align-items: stretch;
+}
+.file-pick-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--space-5) var(--space-6);
+  border: 1.5px dashed rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-xs);
+  background: rgba(0, 0, 0, 0.02);
+  cursor: pointer;
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+  position: relative;
+  overflow: hidden;
+}
+.file-pick-area:hover {
+  border-color: var(--color-border-strong);
+  background: rgba(107, 72, 255, 0.04);
+}
+.file-pick-area:focus-visible {
+  outline: 2px solid var(--color-border-strong);
+  outline-offset: 2px;
+}
+.file-pick-area.has-file {
+  border-style: solid;
+  border-color: rgba(107, 72, 255, 0.4);
+  background: rgba(107, 72, 255, 0.05);
+}
+.file-pick-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.file-pick-label {
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.file-pick-area.has-file .file-pick-label {
+  color: var(--color-surface-base);
+}
+.file-pick-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ── URL Input ── */
+.text-input {
+  width: 100%;
+  padding: var(--space-6) var(--space-7);
+  border: 1.5px solid rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-md);
+  color: var(--color-surface-base);
+  background: #ffffff;
+  outline: none;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+.text-input:hover {
+  border-color: rgba(107, 72, 255, 0.5);
+}
+.text-input:focus {
+  border-color: var(--color-border-strong);
+  box-shadow: 0 0 0 3px rgba(107, 72, 255, 0.2);
+}
+.text-input::placeholder {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+/* ── Drop Zone ── */
+.drop-zone {
+  border: 2px dashed rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-xs);
+  padding: 36px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--duration-normal);
+  position: relative;
+  background: rgba(0, 0, 0, 0.03);
+}
+.drop-zone:hover,
+.drop-zone.drag-over {
+  border-color: var(--color-border-strong);
+  background: rgba(107, 72, 255, 0.05);
+}
+.drop-zone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+.drop-icon {
+  font-size: 32px;
+  margin-bottom: 10px;
+  color: rgba(0, 0, 0, 0.3);
+}
+.drop-label {
+  font-weight: 600;
+  font-size: var(--font-size-md);
+  color: var(--color-surface-base);
+  margin-bottom: var(--space-3);
+}
+.drop-sub {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: var(--font-size-md);
+}
+.drop-browse {
+  color: var(--color-border-strong);
+  font-weight: 500;
+}
+.drop-types {
+  margin-top: 10px;
+  font-size: var(--font-size-sm);
+  color: rgba(0, 0, 0, 0.35);
+  letter-spacing: 0.03em;
+}
+
+/* ── Script Toggle ── */
+.script-section {
+  margin-top: 16px;
+}
+.script-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  background: none;
+  border: 1.5px dashed rgba(107, 72, 255, 0.35);
+  border-radius: var(--radius-xs);
+  padding: var(--space-5) var(--space-7);
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-family-primary);
+  cursor: pointer;
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+  white-space: nowrap;
+}
+.script-toggle-label {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-border-strong);
+}
+.script-toggle:hover {
+  border-color: var(--color-border-strong);
+  background: rgba(107, 72, 255, 0.04);
+}
+.script-toggle:focus-visible {
+  outline: 2px solid var(--color-border-strong);
+  outline-offset: 2px;
+}
+.script-toggle[aria-expanded="true"] .script-toggle-icon {
+  transform: rotate(45deg);
+}
+.script-toggle-icon {
+  font-size: 18px;
+  line-height: 1;
+  transition: transform var(--duration-fast);
+  display: inline-block;
+}
+.script-toggle-hint {
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  line-height: 1.3;
+}
+.script-panel {
+  margin-top: var(--space-4);
+}
+.script-textarea {
+  width: 100%;
+  padding: var(--space-6) var(--space-7);
+  border: 1.5px solid rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-md);
+  color: var(--color-surface-base);
+  background: #ffffff;
+  outline: none;
+  resize: vertical;
+  line-height: 1.6;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+.script-textarea:hover {
+  border-color: rgba(107, 72, 255, 0.5);
+}
+.script-textarea:focus {
+  border-color: var(--color-border-strong);
+  box-shadow: 0 0 0 3px rgba(107, 72, 255, 0.2);
+}
+.script-textarea::placeholder {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+/* ── File Badge ── */
+.file-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  background: rgba(107, 72, 255, 0.08);
+  border: 1px solid rgba(107, 72, 255, 0.25);
+  border-radius: var(--radius-xs);
+  padding: 10px 14px;
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  color: var(--color-surface-base);
+}
+.file-badge.hidden { display: none; }
+.file-badge-icon { font-size: 18px; }
+.file-clear {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  line-height: 1;
+  transition: color var(--duration-fast);
+}
+.file-clear:hover { color: var(--color-surface-base); }
+.file-clear:focus-visible {
+  outline: 2px solid var(--color-border-strong);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}

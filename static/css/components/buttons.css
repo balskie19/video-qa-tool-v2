@@ -1,0 +1,136 @@
+/* ── Primary: Analyze button ── */
+.btn-analyze {
+  margin-top: 20px;
+  width: 100%;
+  padding: var(--space-6) calc(var(--space-8) * 2);
+  background: var(--color-border-strong);
+  color: var(--color-text-secondary);
+  border: none;
+  border-radius: var(--radius-xl);
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  cursor: pointer;
+  transition: box-shadow var(--duration-fast), opacity var(--duration-fast);
+  letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  min-height: 52px;
+}
+.btn-analyze:hover:not(:disabled) {
+  box-shadow: var(--shadow-2);
+}
+.btn-analyze:focus-visible {
+  outline: 2px solid var(--color-text-inverse);
+  outline-offset: 3px;
+}
+.btn-analyze:active:not(:disabled) {
+  opacity: 0.85;
+}
+.btn-analyze:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn-analyze[aria-busy="true"] .btn-label {
+  visibility: hidden;
+}
+.btn-analyze[aria-busy="true"] .btn-spinner {
+  display: block;
+}
+.btn-spinner {
+  display: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  position: absolute;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Results actions row ── */
+.results-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+
+/* ── Copy Report button ── */
+.btn-copy-report {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: transparent;
+  color: var(--color-border-strong);
+  border: 2px solid var(--color-border-strong);
+  padding: var(--space-5) calc(var(--space-8) * 1.5);
+  border-radius: var(--radius-xl);
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+.btn-copy-report:hover {
+  background: var(--color-border-strong);
+  color: var(--color-text-secondary);
+}
+.btn-copy-report:focus-visible {
+  outline: 2px solid var(--color-text-inverse);
+  outline-offset: 3px;
+}
+
+/* ── Per-issue copy button ── */
+.btn-copy-issue {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0.35;
+  padding: 2px 4px;
+  border-radius: var(--radius-xs);
+  transition: opacity var(--duration-fast);
+  line-height: 1;
+  flex-shrink: 0;
+}
+.issue-item:hover .btn-copy-issue,
+.btn-copy-issue:focus-visible {
+  opacity: 1;
+}
+.btn-copy-issue:focus-visible {
+  outline: 2px solid var(--color-border-strong);
+  outline-offset: 2px;
+}
+
+/* ── Secondary: Reset button ── */
+.btn-reset {
+  margin-top: 24px;
+  background: transparent;
+  color: var(--color-border-strong);
+  border: 2px solid var(--color-border-strong);
+  padding: var(--space-5) calc(var(--space-8) * 1.5);
+  border-radius: var(--radius-xl);
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
+}
+.btn-reset:hover {
+  background: var(--color-border-strong);
+  color: var(--color-text-secondary);
+}
+.btn-reset:focus-visible {
+  outline: 2px solid var(--color-text-inverse);
+  outline-offset: 3px;
+}
