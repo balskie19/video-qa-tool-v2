@@ -773,6 +773,8 @@ FRAMES: {len(frames)} frames (~{duration / max(len(frames), 1):.1f}s apart). Rea
 
 {checklist_text}
 
+PLAIN LANGUAGE RULE: Write every issue description for a video editor, not a technician. No dB values, no LUFS, no True Peak, no LRA, no codec terms. Say what the editor sees and what they need to fix.
+
 RETURN VALID JSON ONLY — no preamble, no markdown fences:
 {{
   "issues": [
@@ -812,6 +814,8 @@ VIDEO INFO: {duration:.1f}s | {video_info['width']}x{video_info['height']}
 FRAMES: {len(frames)} frames (~{duration / max(len(frames), 1):.1f}s apart). Inspect every frame carefully.
 
 {checklist_text}
+
+PLAIN LANGUAGE RULE: Write every issue description for a video editor, not a technician. Never include dB values, LUFS, True Peak, LRA, codec terms, or any raw audio measurements. Translate technical signals into what the editor hears or sees and what they need to fix. Example: instead of "True Peak=-0.82 dB indicates clipping", write "The audio is too loud and will distort on most devices — reduce the volume."
 
 RETURN VALID JSON ONLY — no preamble, no markdown fences:
 {{
@@ -862,8 +866,8 @@ def _build_audio_context(audio_data: dict, transcript: dict, captions: dict, spl
         lines.append(f"Mean volume: {audio_data['mean_db']} dB  |  Max: {audio_data['max_db']} dB")
     if audio_data.get("crackling_flag"):
         lines.append(
-            f"[AUDIO FLAG] Possible crackling/clipping — "
-            f"LRA={audio_data['lra']}, True Peak={audio_data['true_peak']} dB"
+            "[AUDIO FLAG] Audio levels are too hot — possible clipping or over-compression detected. "
+            "Flag this as an audio issue using plain language (e.g. 'Audio is too loud and may distort on playback')."
         )
 
     dead_air = audio_data.get("dead_air", [])

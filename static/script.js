@@ -282,13 +282,20 @@ async function runSingleAnalysis(item) {
         try {
           const evt = JSON.parse(json);
           if (evt.type === "complete") {
-            // User-supplied label wins; then backend name; then URL-derived fallback
+            // User-supplied label wins; then backend name (if clean); then URL-derived fallback
             if (item.label) {
               evt.report.filename = item.label;
-            } else if (!evt.report?.filename) {
-              evt.report.filename = item.type === "file"
-                ? item.value.name
-                : _extractUrlLabel(item.value);
+            } else {
+              const backendName = evt.report?.filename || "";
+              // Reject if backend returned a raw URL or hash-only fallback
+              const isJunk = !backendName
+                || backendName.startsWith("http")
+                || /^replay_[a-zA-Z0-9]{8,}\.mp4$/.test(backendName);
+              if (isJunk) {
+                evt.report.filename = item.type === "file"
+                  ? item.value.name
+                  : _extractUrlLabel(item.value);
+              }
             }
           }
           handleEvent(evt);
