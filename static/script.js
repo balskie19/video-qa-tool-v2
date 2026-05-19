@@ -267,7 +267,15 @@ async function runSingleAnalysis(item) {
         if (!line.startsWith("data: ")) continue;
         const json = line.slice(6).trim();
         if (!json) continue;
-        try { handleEvent(JSON.parse(json)); } catch (_) {}
+        try {
+          const evt = JSON.parse(json);
+          if (evt.type === "complete" && !evt.report?.filename) {
+            evt.report.filename = item.type === "file"
+              ? item.value.name
+              : _extractUrlLabel(item.value);
+          }
+          handleEvent(evt);
+        } catch (_) {}
       }
     }
   } catch (err) {
@@ -279,6 +287,7 @@ function handleEvent(evt) {
   if (evt.type === "progress") {
     setProgress(evt.step, evt.percent);
   } else if (evt.type === "complete") {
+    console.log("[DEBUG] complete event filename:", evt.report?.filename, "| full report keys:", Object.keys(evt.report || {}));
     setProgress("Done!", 100);
     setTimeout(() => appendReportCard(evt.report), 300);
   } else if (evt.type === "error") {
@@ -450,6 +459,21 @@ function copyIssueText(issue) {
     issue.description || "",
   ].join("\n");
   navigator.clipboard.writeText(text).then(() => {});
+}
+
+
+// ─── URL Label Helper ────────────────────────────────────
+function _extractUrlLabel(url) {
+  try {
+    const u = new URL(url);
+    // Replay: replay.dropbox.com/share/SHAREID → use share ID
+    const parts = u.pathname.split("/").filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (last && last.length > 3) return last;
+    return u.hostname;
+  } catch (_) {
+    return url.slice(0, 60);
+  }
 }
 
 

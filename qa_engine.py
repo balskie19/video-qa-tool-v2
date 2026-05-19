@@ -82,6 +82,7 @@ async def run_qa_analysis(url: Optional[str] = None, file=None, context: Optiona
         yield {"type": "progress", "step": "Running AI analysis...", "percent": 74}
         report = await analyze_with_ai(frames, audio_data, transcript, captions, video_info, split_errors, context=context)
         report["filename"] = video_filename
+        print(f"[DEBUG] filename in report: {report.get('filename')!r}")
 
         yield {"type": "complete", "report": report}
 
@@ -102,7 +103,8 @@ def get_video(url: Optional[str], file, tmp_dir: str) -> tuple:
         out = os.path.join(tmp_dir, "upload.mp4")
         with open(out, "wb") as f:
             f.write(file.file.read())
-        return out, getattr(file, "filename", "upload.mp4")
+        name = (file.filename or "").strip() or "upload.mp4"
+        return out, name
     if url:
         path, name = download_video(url.strip(), tmp_dir)
         return path, name
