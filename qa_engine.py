@@ -412,21 +412,49 @@ def analyze_audio(audio_path: str) -> dict:
         except Exception:
             pass
 
+    # Per-section volume check — detect inconsistency between first and second half
+    inconsistency_flag = False
+    try:
+        dur_m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", vol_r.stderr)
+        if dur_m:
+            total_sec = int(dur_m.group(1)) * 3600 + int(dur_m.group(2)) * 60 + float(dur_m.group(3))
+            half = total_sec / 2
+            def _section_mean(start, duration):
+                r = subprocess.run(
+                    ["ffmpeg", "-ss", str(start), "-t", str(duration), "-i", audio_path,
+                     "-af", "volumedetect", "-f", "null", "-", "-loglevel", "info"],
+                    capture_output=True, text=True,
+                )
+                m = re.search(r"mean_volume: ([-\d.]+) dB", r.stderr)
+                return float(m.group(1)) if m else None
+            mean_first  = _section_mean(0, half)
+            mean_second = _section_mean(half, half)
+            if mean_first is not None and mean_second is not None:
+                if abs(mean_first - mean_second) >= 8:
+                    inconsistency_flag = True
+    except Exception:
+        pass
+
     return {
-        "mean_db":        float(mean_m.group(1)) if mean_m else None,
-        "max_db":         float(max_m.group(1))  if max_m  else None,
-        "dead_air":       dead_air,
-        "music_gaps":     music_gap,
-        "silence_periods": dead_air,          # kept for backward compat with context builder
-        "lra":            lra,
-        "true_peak":      tp,
-        "crackling_flag": tp is not None and (tp > -1.0 or (lra is not None and lra > 20)),
+        "mean_db":           float(mean_m.group(1)) if mean_m else None,
+        "max_db":            float(max_m.group(1))  if max_m  else None,
+        "dead_air":          dead_air,
+        "music_gaps":        music_gap,
+        "silence_periods":   dead_air,
+        "lra":               lra,
+        "true_peak":         tp,
+        "crackling_flag":    tp is not None and (tp > -1.0 or (lra is not None and lra > 20)),
+        "inconsistency_flag": inconsistency_flag,
     }
 
 
 def transcribe_audio(audio_path: str) -> dict:
     model = get_whisper()
-    result = model.transcribe(audio_path, word_timestamps=True)
+    try:
+        result = model.transcribe(audio_path, word_timestamps=True)
+    except Exception:
+        # word_timestamps can fail on certain audio (reshape tensor bug) — retry without
+        result = model.transcribe(audio_path, word_timestamps=False)
     segs = [
         {"start": round(s["start"], 2), "end": round(s["end"], 2), "text": s["text"].strip()}
         for s in result.get("segments", [])
@@ -462,6 +490,22 @@ def _parse_srt(raw: str) -> list:
     return entries
 
 
+_SPLIT_STOP_WORDS = {
+    "and","the","but","for","at","in","on","is","it","or","to","a","an",
+    "that","this","with","from","they","then","when","what","here","have",
+    "also","just","like","some","into","over","only","even","back","other",
+    "your","our","its","very","each","been","same","does","will","make",
+    "more","most","much","away","well","look","good","down","now","out",
+    "up","all","no","so","do","go","there","their","these","those",
+    "ingredients","product","formula","skin","face","body","hair","cream",
+    "serum","oil","water","love","help","know","think","want","need","feel",
+    "see","get","got","new","first","last","every","always","never","after",
+    "before","which","where","about","still","really","actually","use",
+    "using","works","working","feel","feeling","been","without","within",
+    "something","everything","anything","nothing","someone","everyone",
+}
+
+
 def detect_caption_split_errors(captions: dict) -> list:
     """
     Detects bad caption splits where a word appears at the end of one line
@@ -489,6 +533,23 @@ def detect_caption_split_errors(captions: dict) -> list:
 
         last_word  = curr_words[-1].strip(".,!?-")
         first_word = next_words[0].strip(".,!?-")
+
+        # Hyphenated prefix check BEFORE stop words
+        if '-' in first_word:
+            prefix = first_word.split('-')[0]
+            if len(prefix) >= 3:
+                ocr_corrected = last_word[:-1] + "ti" if last_word.endswith("d") and len(last_word) >= 2 else None
+                if last_word == prefix or (ocr_corrected and ocr_corrected == prefix):
+                    errors.append({
+                        "line_a": entries[i]["text"],
+                        "line_b": entries[i + 1]["text"],
+                        "timestamp": entries[i]["start"],
+                        "duplicate_word": prefix,
+                    })
+                    continue
+
+        if not last_word or last_word in _SPLIT_STOP_WORDS:
+            continue
 
         # Match: last word of line N == first word (or prefix) of line N+1
         if last_word and first_word and len(last_word) >= 4:
@@ -684,6 +745,26 @@ def detect_splits_from_caption_list(caption_list: list) -> list:
         last  = curr_words[-1].strip(".,!?-")
         first = next_words[0].strip(".,!?-")
 
+        # Hyphenated prefix check runs BEFORE stop words — catches OCR misreads like
+        # "anti" → "and" where "and" would otherwise be filtered as a stop word.
+        if '-' in first:
+            prefix = first.split('-')[0]
+            if len(prefix) >= 3:
+                ocr_corrected = last[:-1] + "ti" if last.endswith("d") and len(last) >= 2 else None
+                if last == prefix or (ocr_corrected and ocr_corrected == prefix):
+                    ts = deduped[i]["ts"]
+                    m, s = int(ts // 60), int(ts % 60)
+                    errors.append({
+                        "line_a": deduped[i]["text"],
+                        "line_b": deduped[i + 1]["text"],
+                        "timestamp": f"{m}:{s:02d}",
+                        "duplicate_word": prefix,
+                    })
+                    continue
+
+        if not last or last in _SPLIT_STOP_WORDS:
+            continue
+
         if len(last) >= 4 and (first.startswith(last) or last.startswith(first)):
             ts = deduped[i]["ts"]
             m, s = int(ts // 60), int(ts % 60)
@@ -866,8 +947,13 @@ def _build_audio_context(audio_data: dict, transcript: dict, captions: dict, spl
         lines.append(f"Mean volume: {audio_data['mean_db']} dB  |  Max: {audio_data['max_db']} dB")
     if audio_data.get("crackling_flag"):
         lines.append(
-            "[AUDIO FLAG] Audio levels are too hot — possible clipping or over-compression detected. "
-            "Flag this as an audio issue using plain language (e.g. 'Audio is too loud and may distort on playback')."
+            "[AUDIO FLAG — CLIPPING] Audio levels are too hot — possible clipping or over-compression. "
+            "Flag once as: audio is too loud and may distort on playback."
+        )
+    if audio_data.get("inconsistency_flag"):
+        lines.append(
+            "[AUDIO FLAG — INCONSISTENCY] Volume level changes significantly between the first and second half of the video. "
+            "Flag as: audio is inconsistent — one section sounds noticeably louder or quieter than another."
         )
 
     dead_air = audio_data.get("dead_air", [])

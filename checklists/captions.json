@@ -1,7 +1,7 @@
 {
   "agent": "Captions",
   "checks": [
-    "Caption-VO mismatch — scan word by word from the FIRST caption to the LAST. Compare every caption line against the transcript. Flag any line where even one word differs: wrong word, missing word, extra word, wrong tense, wrong spelling. Do NOT stop at the first mismatch — scan the entire video equally. SPECIALIZED VOCAB EXCEPTION: for botanical names, ingredient names, brand names, medical terms, and product names, Whisper frequently mishears. Do NOT flag as a mismatch based on Whisper alone — only flag if the caption text itself is visually wrong (e.g., caption says 'Ajatica' when you can confirm the correct spelling is 'Asiatica'). Trust the caption for specialized terms unless the caption itself is clearly misspelled.",
+    "Caption-VO mismatch — compare every caption line against the transcript word by word, from first to last. Flag lines where a word is wrong, missing, added, or in the wrong tense.\n\nCRITICAL RULE BEFORE FLAGGING ANY MISMATCH: If the differing word is an ingredient name, botanical name, brand name, product name, or medical/technical term — STOP. Do NOT flag it. Whisper (the transcription model) consistently mishears specialized vocabulary. The caption is correct; the transcript is wrong. Examples of what NOT to flag: transcript says 'Bakuccio' but caption says 'Bakuchiol' — do not flag. Transcript says 'Ajatica' but caption says 'Asiatica' — do not flag. Transcript says 'power camo' but caption says 'Power Camouflage Redness Defense' — do not flag. Only flag a mismatch when the differing word is a plain everyday English word where the caption clearly reads differently from what was said.",
 
     "Duplicate captions — two separate caption layers visible simultaneously on screen. Must SEE two distinct text elements at different positions (e.g., one at bottom, one in middle). NOT: consecutive captions where one replaces the other normally.",
 
@@ -9,7 +9,7 @@
 
     "Wrong sentence splitting — flag when: (1) two separate sentences are merged into one caption, or (2) a caption breaks mid-phrase where a natural pause or clause boundary exists. Use transcript to identify sentence endings. Example: 'My monthly ThreadBeast box – just arrived you – take a quick style – quiz' breaks across three sentences incorrectly.",
 
-    "Caption split typo — A video editor accidentally left a duplicate word at a caption boundary. This only happens with SHORT, SPECIFIC, UNCOMMON words. Before you flag anything, check the word against the BLOCKED LIST below. If the word is on that list, STOP — do not flag, move on.\n\nBLOCKED LIST (never flag these as split typos under any circumstances):\nand, the, but, for, at, in, on, is, it, or, to, a, an, that, this, with, from, they, then, when, what, here, have, also, just, like, some, into, over, only, even, back, other, your, our, its, very, each, been, same, does, will, make, more, most, much, away, well, look, good, down, now, out, up, all, no, so, do, go, one, two, three, there, their, these, those, ingredients, product, formula, skin, face, body, hair, cream, serum, oil, water, use, using, really, actually, love, help, works, working, feel, feeling, know, think, want, need, see, get, got, new, first, last, every, always, never, after, before, because, which, where, about, still, more, less\n\nAn uncommon word that is NOT on the blocked list qualifies if: (1) it appears as the last word of caption N AND the first word of caption N+1, and (2) removing it from the START of caption N+1 still leaves a grammatically complete sentence. Only flag if both conditions are met.\n\nCAUTION: for burned-in captions, OCR errors are common — a small word may be misread entirely. If you are not completely certain what the word is, do not flag.",
+    "Caption split typo — DO NOT search for split typos by scanning frames yourself. The system has already run a programmatic detector that identified all confirmed split errors. Those errors are listed explicitly in the CAPTION SPLIT ERRORS DETECTED section of the audio context above. Your job is only to flag the ones listed there — report each one exactly as provided. If the CAPTION SPLIT ERRORS section is empty or absent, there are no split typos to flag. Do not add any split typos of your own.",
 
     "Captions out of sync — footage clearly changes scenes or actions while the caption still shows the previous line, or captions appear before the matching words are spoken.",
 
@@ -24,9 +24,9 @@
   "do_not_flag": [
     "Lowercase mid-sentence continuations — only flag capitals at the start of new sentences",
     "Specialized vocabulary mismatches driven by Whisper alone — trust the caption for ingredient, brand, botanical, and medical names unless the caption itself is visually wrong",
-    "'ingredients' at a caption boundary — this word is on the blocked list and must never be flagged as a split typo regardless of context",
-    "'and' at a caption boundary — this word is on the blocked list and must never be flagged as a split typo. 'and' is a natural sentence connector. Even if it appears at the end of one caption and the start of the next, do not flag",
-    "Any common English word appearing at a caption boundary — if the word is in normal everyday use, it belongs on the blocked list and should not be flagged",
+    "Caption split typos found by your own visual scanning — the programmatic detector handles this. Only flag what is listed in the CAPTION SPLIT ERRORS DETECTED context",
+    "Audio clipping, audio levels too hot, distortion, loudness, crackling — these are 100% the visual agent's job. Never flag any audio level or quality issue as a captions agent",
+    "VO pronunciation errors that are the same word and same timestamp as a caption-VO mismatch you are already flagging — do not create a duplicate entry for the same moment",
     "Any issue you cannot visually confirm from the frames or transcript — do not flag based on assumption"
   ]
 }

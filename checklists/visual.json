@@ -9,15 +9,15 @@
 
     "Inter-sentence pause — a gap of silence between spoken sentences where the voice stops but music may still be present (music_gap entries in audio data). Flag any music_gap of 1.0 seconds or longer. These pauses between lines should be trimmed to keep pacing tight.",
 
-    "Audio crackling or distortion — any point where the audio sounds rough, crackly, popping, or distorted. Flag obvious clipping from audio data. Flag with exact timestamp.",
+    "Audio clipping or distortion — if the audio data shows a clipping/loudness flag, create exactly ONE issue for it. Describe in plain language what the editor hears and what needs fixing. Do not create multiple issues for the same underlying audio problem.",
 
-    "Audio inconsistency — volume or recording quality changes noticeably between different parts of the video. Flag if one section sounds significantly louder or quieter than another, background noise suddenly increases or drops, or the recording quality changes mid-video. Use loudness data to identify sudden level jumps between segments.",
+    "Audio inconsistency — compare audio quality and volume across different sections of the video. Flag if: (1) one section is noticeably louder or quieter than another, (2) background noise or room tone changes between clips (e.g. quiet room suddenly becomes loud), (3) recording quality shifts mid-video (e.g. clean mic suddenly sounds distant or tinny), (4) the audio data shows INCONSISTENCY FLAG. Even if clipping is already flagged separately, inconsistency is a distinct issue — flag both if both exist.",
 
     "Black lines — horizontal or vertical artifact lines at frame edges or across the image.",
 
     "Jarring jump cut — an abrupt, disorienting scene break with no transition where the cut feels unintentional or rough.",
 
-    "Off-centered overlay — inspect every frame containing text, logo, lower third, graphic, or caption box. Flag if any element appears visually off-center or mispositioned relative to the frame — e.g., a title card shifted left or right, a logo too close to one edge, a lower third not horizontally balanced. Describe exactly what is off-center and at what timestamp.",
+    "Off-centered overlay — for EVERY frame that contains any overlay (text card, caption box, logo, lower third, graphic, title, or CTA), ask: is this element horizontally and vertically centered where it should be? Compare its position to the frame edges. If an element is visibly closer to one side, cut off near an edge, or clearly not where it should sit relative to the subject, flag it. Do not skip frames — check each one individually. Even slight but visible misalignment counts.",
 
     "Misaligned graphic element — any overlay, graphic, or text element that appears skewed, tilted, or not aligned with other elements it should be parallel to.",
 
