@@ -2,11 +2,13 @@ import os
 import json
 import asyncio
 import time
+import hmac
+import hashlib
 from datetime import datetime
 from pathlib import Path
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -30,6 +32,30 @@ def write_run_log(source: str, report: dict, duration_s: float, error: str = Non
 
 load_dotenv()
 
+# ── Auth ──────────────────────────────────────────────────────────────────────
+APP_PASSWORD = os.getenv("APP_PASSWORD", "")
+_SECRET = os.getenv("SECRET_KEY") or hashlib.sha256(
+    (APP_PASSWORD + "video-qa-cab-2026").encode()
+).hexdigest()
+_COOKIE = "qa_session"
+_COOKIE_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
+
+
+def _make_token() -> str:
+    return hmac.new(_SECRET.encode(), b"authenticated", hashlib.sha256).hexdigest()
+
+
+def _is_authenticated(request: Request) -> bool:
+    if not APP_PASSWORD:
+        return True  # no password configured → open access
+    token = request.cookies.get(_COOKIE)
+    if not token:
+        return False
+    return hmac.compare_digest(token, _make_token())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 app = FastAPI(title="Video QA Analyzer")
 
 app.add_middleware(
@@ -42,8 +68,37 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+@app.get("/login")
+async def login_page():
+    return FileResponse("static/login.html")
+
+
+@app.post("/login")
+async def login_submit(password: str = Form(...)):
+    if APP_PASSWORD and password == APP_PASSWORD:
+        resp = RedirectResponse(url="/", status_code=303)
+        resp.set_cookie(
+            _COOKIE,
+            _make_token(),
+            max_age=_COOKIE_MAX_AGE,
+            httponly=True,
+            samesite="lax",
+        )
+        return resp
+    return RedirectResponse(url="/login?error=1", status_code=303)
+
+
+@app.get("/logout")
+async def logout():
+    resp = RedirectResponse(url="/login", status_code=303)
+    resp.delete_cookie(_COOKIE)
+    return resp
+
+
 @app.get("/")
-async def root():
+async def root(request: Request):
+    if not _is_authenticated(request):
+        return RedirectResponse(url="/login", status_code=303)
     return FileResponse(
         "static/index.html",
         headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
@@ -52,10 +107,14 @@ async def root():
 
 @app.post("/analyze")
 async def analyze_video(
+    request: Request,
     url: str = Form(None),
     file: UploadFile = File(None),
     context: str = Form(None),
 ):
+    if not _is_authenticated(request):
+        return Response(status_code=401, content="Unauthorized")
+
     source = (file.filename if file else None) or url or "unknown"
 
     async def generate():

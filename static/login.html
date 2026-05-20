@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign In — Video QA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/tokens.css" />
+  <link rel="stylesheet" href="/static/css/base.css" />
+  <link rel="stylesheet" href="/static/css/typography.css" />
+  <link rel="stylesheet" href="/static/css/components/nav.css" />
+  <link rel="stylesheet" href="/static/css/components/buttons.css" />
+  <link rel="stylesheet" href="/static/css/components/cards.css" />
+  <style>
+    .login-wrap {
+      min-height: calc(100vh - 72px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
+    }
+    .login-card {
+      background: var(--color-surface-strong);
+      border-radius: var(--radius-md);
+      border-top: 3px solid var(--color-border-strong);
+      box-shadow: var(--shadow-4);
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 420px;
+    }
+    .login-icon {
+      font-size: 36px;
+      margin-bottom: 14px;
+      display: block;
+    }
+    .login-title {
+      font-size: var(--font-size-2xl);
+      font-weight: 700;
+      color: var(--color-surface-base);
+      margin-bottom: 6px;
+    }
+    .login-sub {
+      font-size: var(--font-size-md);
+      color: rgba(0, 0, 0, 0.5);
+      margin-bottom: 28px;
+    }
+    .login-label {
+      display: block;
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: rgba(0, 0, 0, 0.65);
+      margin-bottom: 8px;
+      letter-spacing: 0.02em;
+    }
+    .login-input {
+      width: 100%;
+      padding: var(--space-6) var(--space-7);
+      border: 1.5px solid rgba(0, 0, 0, 0.15);
+      border-radius: var(--radius-xs);
+      font-family: var(--font-family-primary);
+      font-size: var(--font-size-md);
+      color: var(--color-surface-base);
+      background: #ffffff;
+      outline: none;
+      transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+      margin-bottom: 20px;
+    }
+    .login-input:hover {
+      border-color: rgba(107, 72, 255, 0.5);
+    }
+    .login-input:focus {
+      border-color: var(--color-border-strong);
+      box-shadow: 0 0 0 3px rgba(107, 72, 255, 0.2);
+    }
+    .login-input::placeholder {
+      color: rgba(0, 0, 0, 0.3);
+    }
+    .login-btn {
+      width: 100%;
+      padding: var(--space-6) var(--space-7);
+      background: var(--color-border-strong);
+      color: var(--color-text-secondary);
+      border: none;
+      border-radius: var(--radius-xl);
+      font-family: var(--font-family-primary);
+      font-size: var(--font-size-lg);
+      font-weight: 600;
+      cursor: pointer;
+      transition: box-shadow var(--duration-fast), opacity var(--duration-fast);
+      min-height: 52px;
+    }
+    .login-btn:hover {
+      box-shadow: var(--shadow-2);
+    }
+    .login-btn:active {
+      opacity: 0.85;
+    }
+    .login-btn:focus-visible {
+      outline: 2px solid var(--color-text-inverse);
+      outline-offset: 3px;
+    }
+    .login-error {
+      display: none;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: var(--radius-xs);
+      padding: 12px 16px;
+      color: #dc2626;
+      font-size: var(--font-size-md);
+      font-weight: 500;
+      margin-bottom: 18px;
+    }
+    .login-error.visible {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="site-header" role="banner">
+    <div class="header-inner">
+      <div class="logo" aria-label="Video QA Analyzer home">
+        <div class="logo-icon" aria-hidden="true">&#9654;</div>
+        <span class="logo-text">Video QA</span>
+      </div>
+      <span class="header-tag">Creative AdBundance</span>
+    </div>
+  </header>
+
+  <!-- Login -->
+  <div class="login-wrap">
+    <div class="login-card">
+      <span class="login-icon" aria-hidden="true">🔒</span>
+      <h1 class="login-title">Team Access</h1>
+      <p class="login-sub">Enter the team password to continue.</p>
+
+      <div class="login-error" id="login-error" role="alert">
+        Incorrect password. Please try again.
+      </div>
+
+      <form method="POST" action="/login" autocomplete="off">
+        <label class="login-label" for="password">Password</label>
+        <input
+          type="password"
+          id="password"
+          name="password"
+          class="login-input"
+          placeholder="Team password"
+          required
+          autofocus
+        />
+        <button type="submit" class="login-btn">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Show error if redirected back with ?error=1
+    if (new URLSearchParams(window.location.search).get("error") === "1") {
+      document.getElementById("login-error").classList.add("visible");
+    }
+  </script>
+
+</body>
+</html>
