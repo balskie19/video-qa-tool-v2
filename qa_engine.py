@@ -151,8 +151,14 @@ def download_video(url: str, tmp_dir: str) -> tuple:
         direct = direct.replace("www.dropbox.com", "dl.dropboxusercontent.com") + sep + "dl=1"
         return _download_direct(direct, tmp_dir), name
 
-    # Dropbox Replay link
+    # Dropbox Replay link — try yt-dlp first (fast), fall back to Playwright
     if "replay.dropbox.com" in url:
+        try:
+            path = _download_yt_dlp(url, out_tmpl, tmp_dir)
+            name = os.path.basename(path)
+            return path, name
+        except Exception:
+            pass
         path, name = _download_replay_playwright(url, tmp_dir)
         return path, name
 
@@ -231,17 +237,17 @@ def _download_replay_playwright(url: str, tmp_dir: str) -> tuple:
 
         page.on("response", _on_response)
         try:
-            page.goto(url, wait_until="load", timeout=45_000)
-            page.wait_for_timeout(2_000)
+            page.goto(url, wait_until="load", timeout=30_000)
+            page.wait_for_timeout(1_500)
             # Try clicking play to trigger video URL load
             try:
-                page.click("video", timeout=2_000)
+                page.click("video", timeout=1_500)
             except Exception:
                 try:
-                    page.click("[aria-label*='play' i]", timeout=1_500)
+                    page.click("[aria-label*='play' i]", timeout=1_000)
                 except Exception:
                     pass
-            page.wait_for_timeout(3_500)
+            page.wait_for_timeout(2_000)
         except Exception:
             pass
 
