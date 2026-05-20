@@ -7,7 +7,7 @@
 
     "Dead air — a period of COMPLETE silence with no voice AND no background music. Flag ALL dead_air entries from the audio data with exact timestamps and duration.",
 
-    "Inter-sentence pause — a gap of silence between spoken sentences where the voice stops but music may still be present (music_gap entries in audio data). Flag any music_gap of 1.0 seconds or longer. These pauses between lines should be trimmed to keep pacing tight.",
+    "Inter-sentence pause — a gap of silence between spoken sentences where the voice stops but music may still be present (music_gap entries in audio data). Flag ALL music_gap entries of 0.5 seconds or longer — every single one listed. These pauses between lines should be trimmed to keep pacing tight. Do not skip any entry, even if there are many.",
 
     "Audio clipping or distortion — if the audio data shows a clipping/loudness flag, create exactly ONE issue for it. Describe in plain language what the editor hears and what needs fixing. Do not create multiple issues for the same underlying audio problem.",
 
@@ -21,17 +21,20 @@
 
     "Misaligned graphic element — any overlay, graphic, or text element that appears skewed, tilted, or not aligned with other elements it should be parallel to.",
 
-    "Endcard missing or incorrect — check the last 3–5 seconds for a proper branded endcard. Flag if the video ends abruptly with no endcard, or if the endcard is missing a logo, handle, website, or call-to-action that should be present based on the content.",
+    "Endcard missing or incorrect — check the last 5 seconds for a dedicated closing/endcard. Flag if the video ends abruptly with no dedicated endcard frame. Only do NOT flag if there is a clear dedicated endcard in the final seconds. IMPORTANT: A branded black screen with a logo or brand name in white text IS a valid endcard — do not flag it as missing. Examples of valid endcards: black screen with 'IL MAKIAGE NEW YORK' in white text, black screen with brand logo, white screen with brand name. Only flag if the last frames show the talent mid-scene, a freeze frame with no branding, or a plain black/white screen with zero brand elements.",
 
     "Branding absent — scan the full video for any client logo or brand identifier. Flag if no branding element appears at any point during the video.",
 
     "VO pronunciation error — review the transcript for words the talent appears to have mispronounced, especially brand names, product names, or medical/technical terms. Flag timestamp, word heard, and what it should be."
   ],
   "do_not_flag": [
-    "Music gaps under 1.0 second — very brief pauses are natural",
+    "Music gaps under 0.5 seconds — very brief pauses are natural",
     "Natural breath pauses mid-sentence",
     "Subtle alignment differences you are not confident about — only flag clear, obvious misalignment",
     "Caption split typos, caption-VO mismatches, caption typos, spelling errors in captions, or ANY caption text content — these are exclusively handled by the Captions agent. Never flag caption content under Overlays, Video, or any other category",
+    "Duplicate captions of any kind — NEVER flag. This check is fully disabled across all agents",
+    "Two lines of a single caption — completely normal, never flag",
+    "Any caption-related issue under Overlays or Video — captions are exclusively the Captions agent's job",
     "Anything you cannot confirm from the frames or audio data — do not flag based on assumption or inference"
   ]
 }

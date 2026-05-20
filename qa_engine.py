@@ -15,8 +15,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Windows: set Tesseract path if not in system PATH
+try:
+    import pytesseract as _pt
+    import shutil as _shutil
+    if not _shutil.which("tesseract"):
+        _win_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+        if os.path.exists(_win_path):
+            _pt.pytesseract.tesseract_cmd = _win_path
+except Exception:
+    pass
+
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 MODEL = os.getenv("MODEL", "anthropic/claude-3.5-sonnet")
+CAPTION_READ_MODEL = os.getenv("CAPTION_READ_MODEL", "anthropic/claude-3-haiku")  # fast model for OCR caption reading
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL", "base")
 
 ai_client = OpenAI(
@@ -43,46 +55,52 @@ async def run_qa_analysis(url: Optional[str] = None, file=None, context: Optiona
     try:
         loop = asyncio.get_event_loop()
 
+        # ── Step 1: Download / receive video ──
         yield {"type": "progress", "step": "Preparing video...", "percent": 5}
         video_path, video_filename = await loop.run_in_executor(None, lambda: get_video(url, file, tmp_dir))
 
         yield {"type": "progress", "step": "Reading video metadata...", "percent": 12}
         video_info = get_video_info(video_path)
 
-        yield {"type": "progress", "step": "Extracting frames...", "percent": 20}
-        frames, fps_val = await loop.run_in_executor(
-            None, lambda: extract_frames(video_path, tmp_dir, video_info["duration"])
+        # ── Step 2: Frames + audio extraction in parallel ──
+        yield {"type": "progress", "step": "Extracting frames and audio...", "percent": 18}
+        (frames, fps_val), audio_path = await asyncio.gather(
+            loop.run_in_executor(None, lambda: extract_frames(video_path, tmp_dir, video_info["duration"])),
+            loop.run_in_executor(None, lambda: extract_audio(video_path, tmp_dir)),
         )
 
-        yield {"type": "progress", "step": "Extracting audio...", "percent": 30}
-        audio_path = await loop.run_in_executor(None, lambda: extract_audio(video_path, tmp_dir))
+        # ── Step 3: Audio analysis + transcription + caption extraction all in parallel ──
+        yield {"type": "progress", "step": "Analyzing audio, transcribing, reading captions...", "percent": 30}
+        results = await asyncio.gather(
+            loop.run_in_executor(None, lambda: analyze_audio(audio_path)),
+            loop.run_in_executor(None, lambda: transcribe_audio(audio_path)),
+            loop.run_in_executor(None, lambda: extract_captions(video_path, tmp_dir)),
+            return_exceptions=True,
+        )
+        audio_data = results[0] if not isinstance(results[0], Exception) else {"dead_air": [], "music_gaps": [], "crackling_flag": False, "inconsistency_flag": False}
+        transcript = results[1] if not isinstance(results[1], Exception) else {"full_text": "", "segments": []}
+        captions   = results[2] if not isinstance(results[2], Exception) else {"found": False, "entries": []}
 
-        yield {"type": "progress", "step": "Analyzing audio levels...", "percent": 38}
-        audio_data = await loop.run_in_executor(None, lambda: analyze_audio(audio_path))
-
-        yield {"type": "progress", "step": "Transcribing audio (this may take a moment)...", "percent": 45}
-        transcript = await loop.run_in_executor(None, lambda: transcribe_audio(audio_path))
-
-        yield {"type": "progress", "step": "Extracting captions...", "percent": 60}
-        captions = await loop.run_in_executor(None, lambda: extract_captions(video_path, tmp_dir))
-
-        # Caption split detection — embedded SRT first, then OCR pass for burned-in captions
-        yield {"type": "progress", "step": "Reading captions from frames...", "percent": 64}
+        # ── Step 4: Caption split detection ──
+        yield {"type": "progress", "step": "Checking captions...", "percent": 58}
         split_errors = await loop.run_in_executor(None, lambda: detect_caption_split_errors(captions))
-        if not split_errors:
-            # No embedded captions or no errors found — run OCR-based caption reading
+        if not captions.get("found"):
+            # No embedded SRT — run OCR-based burned-in caption reading
             caption_strips = await loop.run_in_executor(
                 None, lambda: extract_caption_strips(tmp_dir, video_info["duration"], fps_val)
             )
             if caption_strips:
-                yield {"type": "progress", "step": "AI reading burned-in captions...", "percent": 68}
+                yield {"type": "progress", "step": "Reading burned-in captions...", "percent": 65}
                 ocr_captions = await read_captions_from_frames_ai(caption_strips)
-                split_errors = detect_splits_from_caption_list(ocr_captions)
+                ocr_splits = detect_splits_from_caption_list(ocr_captions)
+                if ocr_splits:
+                    split_errors = ocr_splits
 
+        # ── Step 5: AI analysis ──
         yield {"type": "progress", "step": "Running AI analysis...", "percent": 74}
         report = await analyze_with_ai(frames, audio_data, transcript, captions, video_info, split_errors, context=context)
         report["filename"] = video_filename
-        print(f"[DEBUG] filename in report: {report.get('filename')!r}")
+        report["duration"] = round(video_info["duration"])
 
         yield {"type": "complete", "report": report}
 
@@ -178,11 +196,24 @@ def _download_replay_playwright(url: str, tmp_dir: str) -> tuple:
     with sync_playwright() as pw:
         browser = pw.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-web-security",
+                "--disable-features=IsolateOrigins,site-per-process",
+            ],
         )
         context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            viewport={"width": 1280, "height": 720},
+            locale="en-US",
+            timezone_id="America/New_York",
         )
+        # Hide webdriver flag
+        context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         page = context.new_page()
 
         def _on_response(response):
@@ -194,8 +225,17 @@ def _download_replay_playwright(url: str, tmp_dir: str) -> tuple:
 
         page.on("response", _on_response)
         try:
-            page.goto(url, wait_until="networkidle", timeout=45_000)
-            page.wait_for_timeout(5_000)
+            page.goto(url, wait_until="load", timeout=45_000)
+            page.wait_for_timeout(2_000)
+            # Try clicking play to trigger video URL load
+            try:
+                page.click("video", timeout=2_000)
+            except Exception:
+                try:
+                    page.click("[aria-label*='play' i]", timeout=1_500)
+                except Exception:
+                    pass
+            page.wait_for_timeout(3_500)
         except Exception:
             pass
 
@@ -209,7 +249,6 @@ def _download_replay_playwright(url: str, tmp_dir: str) -> tuple:
             except Exception:
                 pass
             title = page.title()
-            print(f"[DEBUG] Replay page title: {title!r}")
             # Strip "- Dropbox Replay" / "| Replay" suffix and " MP4" suffix from Dropbox titles
             clean = re.sub(r'\s*[-|]\s*(Dropbox\s*Replay|Replay).*$', '', title, flags=re.IGNORECASE).strip()
             clean = re.sub(r'\s+MP4\s*$', '', clean, flags=re.IGNORECASE).strip()
@@ -219,7 +258,6 @@ def _download_replay_playwright(url: str, tmp_dir: str) -> tuple:
             else:
                 display_name = f"replay_{share_id}.mp4"
         except Exception as e:
-            print(f"[DEBUG] Replay title extraction failed: {e}")
             display_name = f"replay_{share_id}.mp4"
 
         browser.close()
@@ -307,9 +345,9 @@ def extract_frames(video_path: str, tmp_dir: str, duration: float) -> tuple:
 
     files = sorted([f for f in os.listdir(frames_dir) if f.endswith(".jpg")])
 
-    # Cap at 60 frames, evenly distributed
-    if len(files) > 60:
-        indices = [int(i * (len(files) - 1) / 59) for i in range(60)]
+    # Cap at 40 frames, evenly distributed
+    if len(files) > 40:
+        indices = [int(i * (len(files) - 1) / 39) for i in range(40)]
         files = [files[i] for i in indices]
 
     result = []
@@ -342,23 +380,28 @@ def extract_audio(video_path: str, tmp_dir: str) -> str:
 
 
 def analyze_audio(audio_path: str) -> dict:
-    # Volume levels
-    vol_r = subprocess.run(
-        ["ffmpeg", "-i", audio_path, "-af", "volumedetect", "-f", "null", "-", "-loglevel", "info"],
-        capture_output=True, text=True,
-    )
-    mean_m = re.search(r"mean_volume: ([-\d.]+) dB", vol_r.stderr)
-    max_m = re.search(r"max_volume: ([-\d.]+) dB", vol_r.stderr)
+    from concurrent.futures import ThreadPoolExecutor
 
-    # Pass 1 — voice silence (no voice at -35dB)
-    sil_r = subprocess.run(
-        ["ffmpeg", "-i", audio_path, "-af", "silencedetect=noise=-35dB:d=0.3",
-         "-f", "null", "-", "-loglevel", "info"],
-        capture_output=True, text=True,
-    )
+    def _run(args):
+        return subprocess.run(args, capture_output=True, text=True)
+
+    # Run all 3 core passes in parallel
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        vol_f   = ex.submit(_run, ["ffmpeg", "-i", audio_path, "-af", "volumedetect", "-f", "null", "-", "-loglevel", "info"])
+        sil35_f = ex.submit(_run, ["ffmpeg", "-i", audio_path, "-af", "silencedetect=noise=-35dB:d=0.3", "-f", "null", "-", "-loglevel", "info"])
+        sil60_f = ex.submit(_run, ["ffmpeg", "-i", audio_path, "-af", "silencedetect=noise=-60dB:d=0.3", "-f", "null", "-", "-loglevel", "info"])
+        vol_r  = vol_f.result()
+        sil_r  = sil35_f.result()
+        sil_r2 = sil60_f.result()
+
+    mean_m = re.search(r"mean_volume: ([-\d.]+) dB", vol_r.stderr)
+    max_m  = re.search(r"max_volume: ([-\d.]+) dB",  vol_r.stderr)
+    mean_db = float(mean_m.group(1)) if mean_m else None
+    max_db  = float(max_m.group(1))  if max_m  else None
+
+    # Voice silence gaps
     starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", sil_r.stderr)]
     ends   = [float(x) for x in re.findall(r"silence_end: ([\d.]+)",   sil_r.stderr)]
-
     voice_silent = []
     for i, s in enumerate(starts):
         if i < len(ends):
@@ -366,15 +409,9 @@ def analyze_audio(audio_path: str) -> dict:
             if dur >= 0.4:
                 voice_silent.append({"start": round(s, 2), "end": round(ends[i], 2), "duration": dur})
 
-    # Pass 2 — total silence (nothing at all at -60dB, catches music/ambient)
-    sil_r2 = subprocess.run(
-        ["ffmpeg", "-i", audio_path, "-af", "silencedetect=noise=-60dB:d=0.3",
-         "-f", "null", "-", "-loglevel", "info"],
-        capture_output=True, text=True,
-    )
+    # Total silence gaps
     starts2 = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", sil_r2.stderr)]
     ends2   = [float(x) for x in re.findall(r"silence_end: ([\d.]+)",   sil_r2.stderr)]
-
     totally_silent = []
     for i, s in enumerate(starts2):
         if i < len(ends2):
@@ -382,79 +419,87 @@ def analyze_audio(audio_path: str) -> dict:
             if dur >= 0.4:
                 totally_silent.append({"start": round(s, 2), "end": round(ends2[i], 2), "duration": dur})
 
-    # Classify: dead_air = silent at BOTH thresholds (no music underneath)
-    #           music_gap = silent at -35dB but NOT at -60dB (background music present)
     def _overlaps(a, b, tol=0.5):
         return a["start"] <= b["end"] + tol and b["start"] <= a["end"] + tol
 
-    dead_air  = []
-    music_gap = []
+    dead_air, music_gap = [], []
     for gap in voice_silent:
-        has_total_silence = any(_overlaps(gap, ts) for ts in totally_silent)
-        if has_total_silence:
-            dead_air.append(gap)
-        else:
-            music_gap.append(gap)
+        (dead_air if any(_overlaps(gap, ts) for ts in totally_silent) else music_gap).append(gap)
 
-    # Loudnorm — LRA + true peak for crackling detection
-    ln_r = subprocess.run(
-        ["ffmpeg", "-i", audio_path, "-af", "loudnorm=print_format=json",
-         "-f", "null", "-", "-loglevel", "info"],
-        capture_output=True, text=True,
-    )
+    # Loudnorm — only run if max_db suggests hot audio (avoids slow pass on clean files)
     lra = tp = None
-    jm = re.search(r"\{[\s\S]+?\}", ln_r.stderr)
-    if jm:
-        try:
-            d = json.loads(jm.group())
-            lra = float(d.get("input_lra", 0))
-            tp  = float(d.get("input_tp", -99))
-        except Exception:
-            pass
+    if max_db is not None and max_db > -3.0:
+        ln_r = subprocess.run(
+            ["ffmpeg", "-i", audio_path, "-af", "loudnorm=print_format=json",
+             "-f", "null", "-", "-loglevel", "info"],
+            capture_output=True, text=True,
+        )
+        jm = re.search(r"\{[\s\S]+?\}", ln_r.stderr)
+        if jm:
+            try:
+                d = json.loads(jm.group())
+                lra = float(d.get("input_lra", 0))
+                tp  = float(d.get("input_tp", -99))
+            except Exception:
+                pass
 
-    # Per-section volume check — detect inconsistency between first and second half
+    # Crackling: use loudnorm tp if available, else approximate from max_db
+    crackling_flag = False
+    if tp is not None:
+        crackling_flag = tp > -0.3 or (lra is not None and lra > 22)
+    elif max_db is not None:
+        crackling_flag = max_db > -1.0  # fallback heuristic
+
+    # Per-section inconsistency — only for videos longer than 60s (skip for short ads)
     inconsistency_flag = False
     try:
         dur_m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", vol_r.stderr)
         if dur_m:
             total_sec = int(dur_m.group(1)) * 3600 + int(dur_m.group(2)) * 60 + float(dur_m.group(3))
-            half = total_sec / 2
-            def _section_mean(start, duration):
-                r = subprocess.run(
-                    ["ffmpeg", "-ss", str(start), "-t", str(duration), "-i", audio_path,
-                     "-af", "volumedetect", "-f", "null", "-", "-loglevel", "info"],
-                    capture_output=True, text=True,
-                )
-                m = re.search(r"mean_volume: ([-\d.]+) dB", r.stderr)
-                return float(m.group(1)) if m else None
-            mean_first  = _section_mean(0, half)
-            mean_second = _section_mean(half, half)
-            if mean_first is not None and mean_second is not None:
-                if abs(mean_first - mean_second) >= 8:
-                    inconsistency_flag = True
+            if total_sec >= 60:
+                half = total_sec / 2
+                def _section_mean(start, duration):
+                    r = subprocess.run(
+                        ["ffmpeg", "-ss", str(start), "-t", str(duration), "-i", audio_path,
+                         "-af", "volumedetect", "-f", "null", "-", "-loglevel", "info"],
+                        capture_output=True, text=True,
+                    )
+                    m = re.search(r"mean_volume: ([-\d.]+) dB", r.stderr)
+                    return float(m.group(1)) if m else None
+                with ThreadPoolExecutor(max_workers=2) as ex:
+                    f1 = ex.submit(_section_mean, 0, half)
+                    f2 = ex.submit(_section_mean, half, half)
+                    mean_first, mean_second = f1.result(), f2.result()
+                if mean_first is not None and mean_second is not None:
+                    if abs(mean_first - mean_second) >= 8:
+                        inconsistency_flag = True
     except Exception:
         pass
 
     return {
-        "mean_db":           float(mean_m.group(1)) if mean_m else None,
-        "max_db":            float(max_m.group(1))  if max_m  else None,
-        "dead_air":          dead_air,
-        "music_gaps":        music_gap,
-        "silence_periods":   dead_air,
-        "lra":               lra,
-        "true_peak":         tp,
-        "crackling_flag":    tp is not None and (tp > -1.0 or (lra is not None and lra > 20)),
+        "mean_db":            mean_db,
+        "max_db":             max_db,
+        "dead_air":           dead_air,
+        "music_gaps":         music_gap,
+        "silence_periods":    dead_air,
+        "lra":                lra,
+        "true_peak":          tp,
+        "crackling_flag":     crackling_flag,
         "inconsistency_flag": inconsistency_flag,
     }
 
 
 def transcribe_audio(audio_path: str) -> dict:
     model = get_whisper()
-    try:
-        result = model.transcribe(audio_path, word_timestamps=True)
-    except Exception:
-        # word_timestamps can fail on certain audio (reshape tensor bug) — retry without
-        result = model.transcribe(audio_path, word_timestamps=False)
+    result = None
+    for use_word_ts in (True, False):
+        try:
+            result = model.transcribe(audio_path, word_timestamps=use_word_ts)
+            break
+        except Exception:
+            continue
+    if result is None:
+        return {"full_text": "", "segments": []}
     segs = [
         {"start": round(s["start"], 2), "end": round(s["end"], 2), "text": s["text"].strip()}
         for s in result.get("segments", [])
@@ -584,8 +629,8 @@ def extract_caption_strips(tmp_dir: str, duration: float, fps_val: float = 2.0) 
     if not files:
         return []
 
-    # Cap at 80 strips — higher than frame cap so caption transitions aren't missed
-    MAX_STRIPS = 80
+    # Cap at 40 strips — enough to catch all caption transitions without excess API calls
+    MAX_STRIPS = 40
     if len(files) > MAX_STRIPS:
         indices = [int(i * (len(files) - 1) / (MAX_STRIPS - 1)) for i in range(MAX_STRIPS)]
         files = [files[i] for i in indices]
@@ -665,7 +710,7 @@ async def read_captions_from_frames_ai(strips: list) -> list:
     transition_strips = find_caption_transitions(strips)
 
     all_captions = []
-    BATCH = 10  # small batches for reliable reading
+    BATCH = 15  # balanced batch size — fewer API calls, still reliable
 
     for batch_start in range(0, len(transition_strips), BATCH):
         batch = transition_strips[batch_start: batch_start + BATCH]
@@ -695,7 +740,7 @@ IMPORTANT:
             content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{strip['b64']}"}})
 
         resp = ai_client.chat.completions.create(
-            model=MODEL,
+            model=CAPTION_READ_MODEL,
             messages=[{"role": "user", "content": content}],
             max_tokens=1000,
         )
@@ -712,6 +757,94 @@ IMPORTANT:
             pass
 
     return all_captions
+
+
+def detect_duplicate_captions(frames_dir: str, fps_val: float) -> list:
+    """
+    Scans the bottom 35% of each frame with pytesseract looking for two distinct
+    caption text bands within that zone — indicating two simultaneous caption layers.
+    Ignores upper-half overlays (ingredient callouts, product names, etc.) entirely.
+    Returns list of {timestamp} dicts.
+    """
+    try:
+        import pytesseract
+        from PIL import Image
+    except ImportError:
+        return []
+
+    if not os.path.exists(frames_dir):
+        return []
+
+    files = sorted([f for f in os.listdir(frames_dir) if f.endswith(".jpg") and f != "frame_last.jpg"])
+    duplicates = []
+    seen_windows = []
+
+    for fname in files:
+        try:
+            fpath = os.path.join(frames_dir, fname)
+            img = Image.open(fpath)
+            w, h = img.size
+
+            # Only scan bottom 35% — where captions live. Ignore upper overlays.
+            crop_top = int(h * 0.65)
+            caption_zone = img.crop((0, crop_top, w, h))
+            zone_h = caption_zone.height
+
+            data = pytesseract.image_to_data(
+                caption_zone,
+                output_type=pytesseract.Output.DICT,
+                config="--psm 11",
+            )
+
+            # Collect Y-center positions of confident text words within the zone
+            text_y = []
+            for i, conf in enumerate(data["conf"]):
+                try:
+                    conf_val = int(conf)
+                except (ValueError, TypeError):
+                    continue
+                if conf_val > 50 and len(data["text"][i].strip()) >= 2:
+                    y_center = data["top"][i] + data["height"][i] / 2
+                    text_y.append(y_center)
+
+            if len(text_y) < 4:  # need enough words to confirm two real lines
+                continue
+
+            # Cluster text into bands by Y position
+            # Sort and look for a gap > 20% of zone height between clusters
+            text_y_sorted = sorted(text_y)
+            zone_gap_threshold = zone_h * 0.20
+
+            band_break = None
+            for idx in range(len(text_y_sorted) - 1):
+                gap = text_y_sorted[idx + 1] - text_y_sorted[idx]
+                if gap > zone_gap_threshold:
+                    band_break = idx
+                    break
+
+            if band_break is None:
+                continue  # all text in one band — normal single caption
+
+            band_a = text_y_sorted[:band_break + 1]
+            band_b = text_y_sorted[band_break + 1:]
+
+            # Both bands must have at least 2 words to confirm real duplicate caption lines
+            if len(band_a) >= 2 and len(band_b) >= 2:
+                num = int(re.search(r"frame_(\d+)", fname).group(1))
+                ts = round((num - 1) / fps_val, 2)
+                m, s = int(ts // 60), int(ts % 60)
+                ts_str = f"{m}:{s:02d}"
+
+                # Deduplicate by 4-second window to avoid flooding
+                window = int(ts) // 4
+                if window not in seen_windows:
+                    seen_windows.append(window)
+                    duplicates.append({"timestamp": ts_str, "ts": ts})
+
+        except Exception:
+            continue
+
+    return duplicates
 
 
 def detect_splits_from_caption_list(caption_list: list) -> list:
@@ -804,8 +937,8 @@ def _format_checklist(data: dict) -> str:
 # AI ANALYSIS — TWO PARALLEL AGENTS
 # ─────────────────────────────────────────────────────────
 
-async def analyze_with_ai(frames, audio_data, transcript, captions, video_info, split_errors=None, context: Optional[str] = None) -> dict:
-    audio_ctx = _build_audio_context(audio_data, transcript, captions, split_errors or [])
+async def analyze_with_ai(frames, audio_data, transcript, captions, video_info, split_errors=None, dup_captions=None, context: Optional[str] = None) -> dict:
+    audio_ctx = _build_audio_context(audio_data, transcript, captions, split_errors or [], dup_captions or [])
     caption_cl = _load_checklist("captions")
     visual_cl  = _load_checklist("visual")
 
@@ -940,7 +1073,7 @@ async def _call_ai(content: list) -> dict:
         return {"issues": [], "summary": "JSON parse error.", "raw": raw, "issue_count": 0}
 
 
-def _build_audio_context(audio_data: dict, transcript: dict, captions: dict, split_errors: list = None) -> str:
+def _build_audio_context(audio_data: dict, transcript: dict, captions: dict, split_errors: list = None, dup_captions: list = None) -> str:
     lines = ["── AUDIO DATA ──"]
 
     if audio_data.get("mean_db") is not None:
@@ -960,19 +1093,27 @@ def _build_audio_context(audio_data: dict, transcript: dict, captions: dict, spl
     music_gaps = audio_data.get("music_gaps", [])
 
     if dead_air:
-        lines.append(f"DEAD AIR (truly silent — no voice, no music) [{len(dead_air)} gap(s)]:")
-        for s in dead_air[:20]:
-            lines.append(f"  {s['start']}s - {s['end']}s  ({s['duration']}s)  <-- FLAG THIS")
+        # Merge consecutive dead air gaps within 2 seconds of each other into one entry
+        merged_dead_air = []
+        for gap in sorted(dead_air, key=lambda x: x["start"]):
+            if merged_dead_air and gap["start"] - merged_dead_air[-1]["end"] <= 2.0:
+                merged_dead_air[-1]["end"] = max(merged_dead_air[-1]["end"], gap["end"])
+                merged_dead_air[-1]["duration"] = round(merged_dead_air[-1]["end"] - merged_dead_air[-1]["start"], 2)
+            else:
+                merged_dead_air.append(dict(gap))
+        lines.append(f"DEAD AIR (truly silent — no voice, no music) [{len(merged_dead_air)} gap(s) — report each as ONE issue]:")
+        for s in merged_dead_air[:20]:
+            lines.append(f"  {s['start']}s - {s['end']}s  ({s['duration']}s)  <-- FLAG THIS as ONE issue")
 
     if music_gaps:
-        long_gaps = [s for s in music_gaps if s["duration"] >= 1.0]
-        short_gaps = [s for s in music_gaps if s["duration"] < 1.0]
+        long_gaps = [s for s in music_gaps if s["duration"] >= 0.5]
+        short_gaps = [s for s in music_gaps if s["duration"] < 0.5]
         if long_gaps:
-            lines.append(f"INTER-SENTENCE PAUSES (voice stops, music present, >=1.0s — FLAG THESE) [{len(long_gaps)} gap(s)]:")
+            lines.append(f"INTER-SENTENCE PAUSES (voice stops, music present, >=0.5s — FLAG EVERY ONE) [{len(long_gaps)} gap(s)]:")
             for s in long_gaps[:20]:
-                lines.append(f"  {s['start']}s - {s['end']}s  ({s['duration']}s)  <-- FLAG: pause between sentences, should be trimmed")
+                lines.append(f"  {s['start']}s - {s['end']}s  ({s['duration']}s)  <-- FLAG THIS")
         if short_gaps:
-            lines.append(f"SHORT MUSIC GAPS (<1.0s — do NOT flag) [{len(short_gaps)} gap(s)]:")
+            lines.append(f"SHORT MUSIC GAPS (<0.5s — do NOT flag) [{len(short_gaps)} gap(s)]:")
             for s in short_gaps[:10]:
                 lines.append(f"  {s['start']}s - {s['end']}s  ({s['duration']}s)")
 

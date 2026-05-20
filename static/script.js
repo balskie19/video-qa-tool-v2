@@ -76,13 +76,6 @@ function addUrlRow(value = "") {
       />
       <button class="btn-remove-row" type="button" aria-label="Remove this link">&times;</button>
     </div>
-    <input
-      type="text"
-      class="url-label-input"
-      placeholder="Video name (optional — used in report)"
-      autocomplete="off"
-      spellcheck="false"
-    />
   `;
   if (value) row.querySelector(".url-single-input").value = value;
   row.querySelector(".btn-remove-row").addEventListener("click", () => {
@@ -194,7 +187,6 @@ async function startAnalysis() {
     const rows = urlList.querySelectorAll(".input-row");
     const items = Array.from(rows).map(row => ({
       url: (row.querySelector(".url-single-input")?.value || "").trim(),
-      label: (row.querySelector(".url-label-input")?.value || "").trim(),
     })).filter(i => i.url);
     if (!items.length) {
       const first = urlList.querySelector(".url-single-input");
@@ -205,7 +197,7 @@ async function startAnalysis() {
       }
       return;
     }
-    _queue = items.map(i => ({ type: "url", value: i.url, label: i.label }));
+    _queue = items.map(i => ({ type: "url", value: i.url }));
   } else {
     const files = Object.values(_fileRowData);
     if (!files.length) {
@@ -231,7 +223,8 @@ async function startAnalysis() {
     updateCounter(i + 1, total);
     startElapsedTimer();
     setProgress("Preparing video...", 2);
-    await runSingleAnalysis(_queue[i]);
+    const videoStart = Date.now();
+    await runSingleAnalysis(_queue[i], videoStart);
     stopElapsedTimer();
   }
 
@@ -249,7 +242,7 @@ function updateCounter(current, total) {
   }
 }
 
-async function runSingleAnalysis(item) {
+async function runSingleAnalysis(item, videoStart = Date.now()) {
   const fd = new FormData();
   if (item.type === "url") {
     fd.append("url", item.value);
@@ -282,10 +275,8 @@ async function runSingleAnalysis(item) {
         try {
           const evt = JSON.parse(json);
           if (evt.type === "complete") {
-            // User-supplied label wins; then backend name (if clean); then URL-derived fallback
-            if (item.label) {
-              evt.report.filename = item.label;
-            } else {
+            // Use backend name (if clean); then URL-derived fallback
+            {
               const backendName = evt.report?.filename || "";
               // Reject if backend returned a raw URL or hash-only fallback
               const isJunk = !backendName
@@ -297,6 +288,9 @@ async function runSingleAnalysis(item) {
                   : _extractUrlLabel(item.value);
               }
             }
+            // Attach elapsed time to the report
+            const elapsedSec = Math.floor((Date.now() - videoStart) / 1000);
+            evt.report._elapsed = elapsedSec;
           }
           handleEvent(evt);
         } catch (_) {}
@@ -336,16 +330,33 @@ function appendReportCard(report) {
   section.className = "card results-card";
   section.setAttribute("aria-label", "QA report");
 
-  const issues  = report.issues || [];
-  const count   = report.issue_count ?? issues.length;
+  // Filter Minor issues where the AI itself says it's a Whisper mishear / caption is correct
+  const _whisperPhrases = [
+    "whisper", "mishear", "caption is correct", "transcript is wrong",
+    "caption correctly", "whisper misread", "phonetic", "specialized vocabulary"
+  ];
+  const issues = (report.issues || []).filter(issue => {
+    if ((issue.severity || "").toLowerCase() !== "minor") return true;
+    const text = ((issue.description || "") + " " + (issue.issue || "")).toLowerCase();
+    return !_whisperPhrases.some(p => text.includes(p));
+  });
+  const count = issues.length;
 
   const badgeClass = count === 0 ? "badge-ok" : count <= 3 ? "badge-warn" : "badge-fail";
   const badgeText  = count === 0 ? "No issues" : count === 1 ? "1 issue" : `${count} issues`;
 
+  const elapsedStr = report._elapsed != null
+    ? (() => { const m = Math.floor(report._elapsed / 60), s = report._elapsed % 60; return `${m}:${String(s).padStart(2,"0")}`; })()
+    : null;
+
+  const durationStr = report.duration != null
+    ? (() => { const m = Math.floor(report.duration / 60), s = report.duration % 60; return `${m}:${String(s).padStart(2,"0")}`; })()
+    : null;
+
   section.innerHTML = `
     <div class="results-header">
       <div>
-        <p class="report-label">QA Report</p>
+        <p class="report-label">QA Report${durationStr ? ` <span class="report-elapsed">&#127909; ${durationStr}</span>` : ""}${elapsedStr ? ` <span class="report-elapsed">&#9201; ${elapsedStr}</span>` : ""}</p>
         <h2 class="card-title report-title">${report.filename ? `<span class="report-file-icon" aria-hidden="true">&#128250;</span> ${esc(report.filename)}` : "QA Report"}</h2>
         <p class="summary-text">${esc(report.summary || "")}</p>
       </div>

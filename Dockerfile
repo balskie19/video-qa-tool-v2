@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     curl \
     gnupg \
+    tesseract-ocr \
     libnss3 \
     libatk1.0-0 \
     libatk-bridge2.0-0 \
@@ -35,6 +36,6 @@ COPY . .
 # Create logs directory
 RUN mkdir -p logs
 
-EXPOSE 8000
+EXPOSE 7860
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
