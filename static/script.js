@@ -411,10 +411,31 @@ function appendReportCard(report) {
   section.querySelector(".btn-copy-report").addEventListener("click", (e) => {
     const btn = e.currentTarget;
     const label = btn.querySelector(".copy-report-label");
-    navigator.clipboard.writeText(formatReportText(report)).then(() => {
-      label.textContent = "Copied!";
-      setTimeout(() => { label.textContent = "Copy Report"; }, 2000);
-    });
+    const text = formatReportText(report);
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        label.textContent = "Copied!";
+        setTimeout(() => { label.textContent = "Copy Report"; }, 2000);
+      });
+    } else {
+      // HTTP fallback
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand("copy");
+        label.textContent = "Copied!";
+        setTimeout(() => { label.textContent = "Copy Report"; }, 2000);
+      } catch (err) {
+        label.textContent = "Copy failed";
+        setTimeout(() => { label.textContent = "Copy Report"; }, 2000);
+      }
+      document.body.removeChild(ta);
+    }
   });
 
   resultsList.appendChild(section);
