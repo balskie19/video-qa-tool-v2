@@ -30,11 +30,17 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 MODEL = os.getenv("MODEL", "anthropic/claude-3.5-sonnet")
 CAPTION_READ_MODEL = os.getenv("CAPTION_READ_MODEL", "anthropic/claude-3-haiku")  # fast model for OCR caption reading
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL", "base")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 ai_client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=OPENROUTER_API_KEY,
 )
+
+groq_client = OpenAI(
+    base_url="https://api.groq.com/openai/v1",
+    api_key=GROQ_API_KEY,
+) if GROQ_API_KEY else None
 
 _whisper_model = None
 
@@ -490,6 +496,25 @@ def analyze_audio(audio_path: str) -> dict:
 
 
 def transcribe_audio(audio_path: str) -> dict:
+    # ── Groq Whisper API (fast, preferred when key is set) ──
+    if groq_client:
+        try:
+            with open(audio_path, "rb") as f:
+                resp = groq_client.audio.transcriptions.create(
+                    model="whisper-large-v3",
+                    file=f,
+                    response_format="verbose_json",
+                    timestamp_granularities=["segment"],
+                )
+            segs = [
+                {"start": round(s.start, 2), "end": round(s.end, 2), "text": s.text.strip()}
+                for s in (resp.segments or [])
+            ]
+            return {"full_text": resp.text, "segments": segs}
+        except Exception:
+            pass  # fall through to local Whisper
+
+    # ── Local Whisper fallback ──
     model = get_whisper()
     result = None
     for use_word_ts in (True, False):
