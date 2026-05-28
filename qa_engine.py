@@ -1128,26 +1128,45 @@ def _format_checklist(data: dict) -> str:
 # AI ANALYSIS — TWO PARALLEL AGENTS
 # ─────────────────────────────────────────────────────────
 
-async def analyze_with_ai(frames, audio_data, transcript, captions, video_info, split_errors=None, dup_captions=None, context: Optional[str] = None, audio_levels: Optional[dict] = None, scene_cuts: Optional[list] = None) -> dict:
-    audio_ctx = _build_audio_context(audio_data, transcript, captions, split_errors or [], dup_captions or [], audio_levels=audio_levels, video_duration=video_info.get("duration", 0), scene_cuts=scene_cuts or [])
-    caption_cl = _load_checklist("captions")
-    visual_cl  = _load_checklist("visual")
-
+async def _run_agents(frames, audio_ctx, video_info, caption_cl, visual_cl, context):
+    """Run both agents in parallel and return (captions_result, visual_result)."""
     captions_task = asyncio.create_task(
         _captions_agent(frames, audio_ctx, video_info, caption_cl, context=context)
     )
     visual_task = asyncio.create_task(
         _visual_agent(frames, audio_ctx, video_info, visual_cl, context=context)
     )
-
     captions_result, visual_result = await asyncio.gather(captions_task, visual_task, return_exceptions=True)
-
     if isinstance(captions_result, Exception):
         print(f"[ERROR] captions_agent failed: {captions_result}", flush=True)
         captions_result = {"issues": [], "summary": "", "issue_count": 0}
     if isinstance(visual_result, Exception):
         print(f"[ERROR] visual_agent failed: {visual_result}", flush=True)
         visual_result = {"issues": [], "summary": "", "issue_count": 0}
+    return captions_result, visual_result
+
+
+async def analyze_with_ai(frames, audio_data, transcript, captions, video_info, split_errors=None, dup_captions=None, context: Optional[str] = None, audio_levels: Optional[dict] = None, scene_cuts: Optional[list] = None) -> dict:
+    audio_ctx = _build_audio_context(audio_data, transcript, captions, split_errors or [], dup_captions or [], audio_levels=audio_levels, video_duration=video_info.get("duration", 0), scene_cuts=scene_cuts or [])
+    caption_cl = _load_checklist("captions")
+    visual_cl  = _load_checklist("visual")
+
+    captions_result, visual_result = await _run_agents(frames, audio_ctx, video_info, caption_cl, visual_cl, context)
+
+    # If both agents returned 0 issues on a non-trivial video, run once more.
+    # Gemini 2.0 Flash is non-deterministic — a single 0-result pass may be a miss.
+    # Retry only when the video has real content (has frames and some audio/transcript signal).
+    has_content = len(frames) > 5 and (
+        audio_data.get("mean_db") is not None or
+        len(transcript.get("segments", [])) > 0 or
+        audio_levels is not None
+    )
+    if (not captions_result.get("issues") and not visual_result.get("issues")) and has_content:
+        print("[analyze_with_ai] 0 issues on non-trivial video — retrying once", flush=True)
+        captions_result2, visual_result2 = await _run_agents(frames, audio_ctx, video_info, caption_cl, visual_cl, context)
+        # Take whichever pass found more issues
+        if len(captions_result2.get("issues", [])) + len(visual_result2.get("issues", [])) > 0:
+            captions_result, visual_result = captions_result2, visual_result2
 
     all_issues = captions_result.get("issues", []) + visual_result.get("issues", [])
     all_issues.sort(key=lambda x: {"Critical": 0, "Major": 1, "Minor": 2}.get(x.get("severity", "Minor"), 2))
@@ -1307,6 +1326,7 @@ async def _call_ai(content: list) -> dict:
             model=MODEL,
             messages=[{"role": "user", "content": content}],
             max_tokens=4096,
+            temperature=0,
         ),
     )
     if not resp or not resp.choices:
