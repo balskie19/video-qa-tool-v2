@@ -430,6 +430,7 @@ function appendReportCard(report) {
         <div class="no-issues-icon">&#10003;</div>
         <div class="no-issues-title">Looks good!</div>
         <p>No quality issues detected.</p>
+        <p class="no-issues-note">Subtle checks (disclaimer readability, B-roll pacing) still benefit from a quick human pass.</p>
       </div>`;
   } else if (report.raw) {
     const pre = document.createElement("pre");
@@ -457,6 +458,13 @@ function appendReportCard(report) {
         grid.appendChild(buildIssueCard(issue));
       }
     }
+  }
+
+  if (count > 0) {
+    const note = document.createElement("p");
+    note.className = "report-human-note";
+    note.textContent = "Tip: subtle checks (disclaimer readability, B-roll pacing) still benefit from a quick human pass.";
+    grid.appendChild(note);
   }
 
   section.querySelector(".btn-copy-report").addEventListener("click", (e) => {
