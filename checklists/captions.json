@@ -34,6 +34,7 @@
     "Audio clipping, audio levels, distortion, loudness, crackling — 100% the visual agent's job. Never flag audio issues here",
     "Dead air, silence gaps, audio pauses — 100% the visual agent's job. Never flag silence under Captions",
     "VO pronunciation errors same as a caption mismatch you're already flagging — no duplicate entries",
-    "Anything you cannot visually confirm from frames or transcript — no assumption-based flags"
+    "Anything you cannot visually confirm from frames or transcript — no assumption-based flags",
+    "CRITICAL — if you find yourself writing 'do not flag', 'should not be flagged', 'probable correct word = caption', or 'reviewer to confirm it is not an error' in an issue description, DELETE that issue from the array entirely. Never include an issue you are already saying should not be flagged. If in doubt, omit it."
   ]
 }
