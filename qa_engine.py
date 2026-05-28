@@ -1217,6 +1217,8 @@ FRAMES: {len(frames)} frames (~{duration / max(len(frames), 1):.1f}s apart). Rea
 
 PLAIN LANGUAGE RULE: Write every issue description for a video editor, not a technician. No dB values, no LUFS, no True Peak, no LRA, no codec terms. Say what the editor sees and what they need to fix.
 
+TIMESTAMP FORMAT: Always use MM:SS format (e.g. 0:05, 0:17, 1:02). Transcript segment times are given in raw seconds — convert them: 17.38s = 0:17, 35.0s = 0:35, 90.5s = 1:30. Never write a timestamp like "17:38" or "35:00" for a short video.
+
 RETURN VALID JSON ONLY — no preamble, no markdown fences:
 {{
   "issues": [
@@ -1271,6 +1273,8 @@ Before filling in the issues array, answer these two questions internally:
 Only after completing both pre-checks, write your issues array.
 
 PLAIN LANGUAGE RULE: Write every issue description for a video editor, not a technician. Never include dB values, LUFS, True Peak, LRA, codec terms, or any raw audio measurements. Translate technical signals into what the editor hears or sees and what they need to fix. Example: instead of "True Peak=-0.82 dB indicates clipping", write "The audio is too loud and will distort on most devices — reduce the volume."
+
+TIMESTAMP FORMAT: Always use MM:SS format (e.g. 0:05, 0:17, 1:02). Transcript segment times are given in raw seconds — convert them: 17.38s = 0:17, 35.0s = 0:35, 90.5s = 1:30. Never write a timestamp like "17:38" or "35:00" for a short video.
 
 RETURN VALID JSON ONLY — no preamble, no markdown fences:
 {{
