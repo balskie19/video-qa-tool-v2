@@ -141,9 +141,9 @@
 }
 
 /* ── File Pick Area (per-row) ── */
-.file-input-row {
-  flex-direction: row;
-  align-items: stretch;
+.input-row-main .file-pick-area {
+  flex: 1;
+  min-width: 0;
 }
 .file-pick-area {
   flex: 1;
@@ -345,6 +345,69 @@
 .script-textarea::placeholder {
   color: rgba(0, 0, 0, 0.35);
 }
+
+/* ── Per-row Script Section ── */
+.row-script-section {
+  padding-left: 4px;
+}
+.row-script-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  padding: 3px 0;
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: rgba(107, 72, 255, 0.7);
+  cursor: pointer;
+  transition: color var(--duration-fast);
+}
+.row-script-toggle:hover {
+  color: var(--color-border-strong);
+}
+.row-script-toggle:focus-visible {
+  outline: 2px solid var(--color-border-strong);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.row-script-toggle-icon {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-block;
+  transition: transform var(--duration-fast);
+}
+.row-script-textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: var(--space-5) var(--space-6);
+  border: 1.5px solid rgba(107, 72, 255, 0.25);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-sm);
+  color: var(--color-surface-base);
+  background: rgba(107, 72, 255, 0.02);
+  outline: none;
+  resize: vertical;
+  line-height: 1.6;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+.row-script-textarea:hover {
+  border-color: rgba(107, 72, 255, 0.5);
+}
+.row-script-textarea:focus {
+  border-color: var(--color-border-strong);
+  box-shadow: 0 0 0 3px rgba(107, 72, 255, 0.15);
+  background: #fff;
+}
+.row-script-textarea::placeholder {
+  color: rgba(0, 0, 0, 0.32);
+  font-style: italic;
+}
+.row-script-textarea.hidden { display: none; }
 
 /* ── File Badge ── */
 .file-badge {

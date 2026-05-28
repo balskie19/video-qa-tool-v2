@@ -76,11 +76,23 @@ function addUrlRow(value = "") {
       />
       <button class="btn-remove-row" type="button" aria-label="Remove this link">&times;</button>
     </div>
+    <div class="row-script-section">
+      <button class="row-script-toggle" type="button" aria-expanded="false">
+        <span class="row-script-toggle-icon">+</span> Add Script
+      </button>
+      <textarea
+        class="row-script-textarea hidden"
+        placeholder="Paste the script for this video — helps catch caption mismatches and sentence splits..."
+        rows="4"
+        spellcheck="false"
+      ></textarea>
+    </div>
   `;
   if (value) row.querySelector(".url-single-input").value = value;
   row.querySelector(".btn-remove-row").addEventListener("click", () => {
     removeRow(id, urlList);
   });
+  _bindRowScriptToggle(row);
   urlList.appendChild(row);
   updateRemoveVisibility(urlList);
   return row;
@@ -96,15 +108,28 @@ btnAddUrl.addEventListener("click", () => {
 function addFileRow() {
   const id = `file-row-${_fileRowCount++}`;
   const row = document.createElement("div");
-  row.className = "input-row file-input-row";
+  row.className = "input-row";
   row.id = id;
   row.innerHTML = `
-    <div class="file-pick-area" role="button" tabindex="0" aria-label="Choose a video file">
-      <span class="file-pick-icon" aria-hidden="true">&#128250;</span>
-      <span class="file-pick-label">Choose video file…</span>
-      <input type="file" accept="video/*" class="file-pick-input" aria-hidden="true" tabindex="-1" />
+    <div class="input-row-main">
+      <div class="file-pick-area" role="button" tabindex="0" aria-label="Choose a video file">
+        <span class="file-pick-icon" aria-hidden="true">&#128250;</span>
+        <span class="file-pick-label">Choose video file…</span>
+        <input type="file" accept="video/*" class="file-pick-input" aria-hidden="true" tabindex="-1" />
+      </div>
+      <button class="btn-remove-row" type="button" aria-label="Remove this file">&times;</button>
     </div>
-    <button class="btn-remove-row" type="button" aria-label="Remove this file">&times;</button>
+    <div class="row-script-section">
+      <button class="row-script-toggle" type="button" aria-expanded="false">
+        <span class="row-script-toggle-icon">+</span> Add Script
+      </button>
+      <textarea
+        class="row-script-textarea hidden"
+        placeholder="Paste the script for this video — helps catch caption mismatches and sentence splits..."
+        rows="4"
+        spellcheck="false"
+      ></textarea>
+    </div>
   `;
   const pickArea  = row.querySelector(".file-pick-area");
   const fileInput = row.querySelector(".file-pick-input");
@@ -125,9 +150,25 @@ function addFileRow() {
     delete _fileRowData[id];
     removeRow(id, fileList);
   });
+  _bindRowScriptToggle(row);
   fileList.appendChild(row);
   updateRemoveVisibility(fileList);
   return row;
+}
+
+
+// ─── Per-row Script Toggle ───────────────────────────────
+function _bindRowScriptToggle(row) {
+  const toggle   = row.querySelector(".row-script-toggle");
+  const textarea = row.querySelector(".row-script-textarea");
+  if (!toggle || !textarea) return;
+  toggle.addEventListener("click", () => {
+    const expanded = toggle.getAttribute("aria-expanded") === "true";
+    toggle.setAttribute("aria-expanded", !expanded);
+    textarea.classList.toggle("hidden", expanded);
+    toggle.querySelector(".row-script-toggle-icon").textContent = expanded ? "+" : "×";
+    if (!expanded) textarea.focus();
+  });
 }
 
 btnAddFile.addEventListener("click", () => addFileRow());
@@ -186,7 +227,8 @@ async function startAnalysis() {
   if (activeTab === "url") {
     const rows = urlList.querySelectorAll(".input-row");
     const items = Array.from(rows).map(row => ({
-      url: (row.querySelector(".url-single-input")?.value || "").trim(),
+      url:    (row.querySelector(".url-single-input")?.value || "").trim(),
+      script: (row.querySelector(".row-script-textarea")?.value || "").trim(),
     })).filter(i => i.url);
     if (!items.length) {
       const first = urlList.querySelector(".url-single-input");
@@ -197,9 +239,17 @@ async function startAnalysis() {
       }
       return;
     }
-    _queue = items.map(i => ({ type: "url", value: i.url }));
+    _queue = items.map(i => ({ type: "url", value: i.url, script: i.script }));
   } else {
-    const files = Object.values(_fileRowData);
+    const rows = fileList.querySelectorAll(".input-row");
+    const rowScripts = {};
+    rows.forEach(row => {
+      const id = row.id;
+      if (_fileRowData[id]) {
+        rowScripts[id] = (row.querySelector(".row-script-textarea")?.value || "").trim();
+      }
+    });
+    const files = Object.keys(_fileRowData);
     if (!files.length) {
       const first = fileList.querySelector(".file-pick-area");
       if (first) {
@@ -208,7 +258,7 @@ async function startAnalysis() {
       }
       return;
     }
-    _queue = files.map(f => ({ type: "file", value: f }));
+    _queue = files.map(id => ({ type: "file", value: _fileRowData[id], script: rowScripts[id] || "" }));
   }
 
   resultsList.innerHTML = "";
@@ -249,7 +299,8 @@ async function runSingleAnalysis(item, videoStart = Date.now()) {
   } else {
     fd.append("file", item.value);
   }
-  const contextText = scriptInput.value.trim();
+  // Per-video script takes priority; fall back to global context box
+  const contextText = item.script || scriptInput.value.trim();
   if (contextText) fd.append("context", contextText);
 
   try {

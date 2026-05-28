@@ -1,40 +1,52 @@
 {
   "agent": "Visual",
   "checks": [
-    "Glitch — footage that flickers, pops in, or disappears for a single frame or fraction of a second. Check every frame for sudden scene changes, flashes, or content that appears briefly then cuts away. Even a half-second appearance of wrong footage counts. Flag with timestamp.",
+    "Glitch — footage that flickers, pops in, or disappears for a single frame or fraction of a second IN THE MIDDLE OF CONTENT. Also flag: any dark, black, white, or colored overlay or animation effect that covers and obscures the main content (sign text, talent face, product, on-screen text) making it unreadable or invisible — even if the effect looks stylistic. The viewer losing access to the primary content is always a flag. EXCEPTION: white or colored frames in the last 5 seconds that are part of an endcard transition are NOT glitches — see do_not_flag.",
+
+    "Sign or prop text obscured — if the talent holds a physical sign, card, or paper with text on it: for EVERY frame containing that sign, ask yourself: can I read ALL the words on this sign right now? If the answer is NO for any frame — because a dark layer, black panel, color overlay, or animation effect is covering any part of the sign — flag it immediately. Do not decide whether the overlay is intentional. Do not consider whether it also happens in other frames. Simply: text not fully readable = flag. State the timestamp and describe what is covering the text.",
 
     "Black screen — any frame that is fully black when it should not be. Check every frame, especially the very first and very last.",
 
     "Dead air — a period of COMPLETE silence with no voice AND no background music. Flag ALL dead_air entries from the audio data with exact timestamps and duration.",
 
-    "Inter-sentence pause — a gap of silence between spoken sentences where the voice stops but music may still be present (music_gap entries in audio data). Flag ALL music_gap entries of 0.5 seconds or longer — every single one listed. These pauses between lines should be trimmed to keep pacing tight. Do not skip any entry, even if there are many.",
+    "Inter-sentence pause — a gap of silence between spoken sentences where the voice stops but music may still be present (music_gap entries in audio data). ONLY flag pauses of 2.0 seconds or longer — shorter pauses are natural speech pacing and must NOT be flagged. Flag only the ones listed in the audio data that meet the 2.0s threshold.",
 
     "Audio clipping or distortion — if the audio data shows a clipping/loudness flag, create exactly ONE issue for it. Describe in plain language what the editor hears and what needs fixing. Do not create multiple issues for the same underlying audio problem.",
 
-    "Audio inconsistency — compare audio quality and volume across different sections of the video. Flag if: (1) one section is noticeably louder or quieter than another, (2) background noise or room tone changes between clips (e.g. quiet room suddenly becomes loud), (3) recording quality shifts mid-video (e.g. clean mic suddenly sounds distant or tinny), (4) the audio data shows INCONSISTENCY FLAG. Even if clipping is already flagged separately, inconsistency is a distinct issue — flag both if both exist.",
+    "Audio inconsistency — only flag if there is a dramatic, unmistakable volume shift between sections — the kind where one section sounds significantly louder or quieter that an editor would immediately notice on any speaker. Do NOT flag natural variation in human speech pace or energy. Only flag if the audio data explicitly shows an INCONSISTENCY FLAG.",
 
     "Black lines — horizontal or vertical artifact lines at frame edges or across the image.",
 
-    "Jarring jump cut — an abrupt, disorienting scene break with no transition where the cut feels unintentional or rough.",
+    "Jarring jump cut — an abrupt, disorienting scene break with no transition where the cut feels clearly unintentional or like a production error. Do NOT flag intentional fast cuts or stylistic edits.",
 
-    "Off-centered overlay — for EVERY frame that contains any overlay (text card, caption box, logo, lower third, graphic, title, or CTA), ask: is this element horizontally and vertically centered where it should be? Compare its position to the frame edges. If an element is visibly closer to one side, cut off near an edge, or clearly not where it should sit relative to the subject, flag it. Do not skip frames — check each one individually. Even slight but visible misalignment counts.",
+    "Off-centered overlay — for every frame with an overlay (text card, logo, lower third, graphic, title, or CTA), check whether it is clearly and visibly off-axis. Only flag if the element is noticeably pushed to one side — more than roughly 15% of the frame width away from center. Do NOT flag subtle perceived offsets in roughly-centered elements. When in doubt, do not flag.",
 
     "Misaligned graphic element — any overlay, graphic, or text element that appears skewed, tilted, or not aligned with other elements it should be parallel to.",
 
-    "Endcard missing or incorrect — check the last 5 seconds for a dedicated closing/endcard. Flag if the video ends abruptly with no dedicated endcard frame. Only do NOT flag if there is a clear dedicated endcard in the final seconds. IMPORTANT: A branded black screen with a logo or brand name in white text IS a valid endcard — do not flag it as missing. Examples of valid endcards: black screen with 'IL MAKIAGE NEW YORK' in white text, black screen with brand logo, white screen with brand name. Only flag if the last frames show the talent mid-scene, a freeze frame with no branding, or a plain black/white screen with zero brand elements.",
+    "Endcard missing or incorrect — check the last 5 seconds using both the final frames AND the [AUDIO METADATA] above. Decision logic: (1) If Endcard audio present = YES in [AUDIO METADATA] — background music is running. Only flag if the talent is clearly still mid-scene or mid-action with zero brand elements visible. A plain colored or black screen with music running is an acceptable endcard. (2) If Endcard audio present = NO (complete silence) AND the final frames show a plain black/white screen with no logo, no brand name, and no brand color — flag as missing endcard. (3) Branded screens (logo, brand name, brand color) are always valid endcards regardless of audio. (4) Talent mid-scene with no brand elements = always flag.",
 
     "Branding absent — scan the full video for any client logo or brand identifier. Flag if no branding element appears at any point during the video.",
 
-    "VO pronunciation error — review the transcript for words the talent appears to have mispronounced, especially brand names, product names, or medical/technical terms. Flag timestamp, word heard, and what it should be."
+    "Talking head without B-roll cutaway — if the main content section shows the talent speaking on camera continuously for more than 5 seconds with no B-roll cutaway, flag the timestamp range. This applies to the main body of the ad, not hooks or CTAs.",
+
+    "Scene continuity break — if the talent switches outfit, hairstyle, or filming location between two consecutive cuts with no title card or visual transition separating them, flag the cut point. This is a sign of footage from different shooting sessions spliced together without a separator.",
+
+    "Disclaimer readability — if a disclaimer IS present on screen but (a) the font appears too small to read on a phone, (b) it sits at the very edge of the frame where it could be cropped, or (c) it overlaps a split-screen seam making part of it unreadable — flag it."
   ],
   "do_not_flag": [
-    "Music gaps under 0.5 seconds — very brief pauses are natural",
+    "Pauses under 2.0 seconds — natural speech pacing, do not flag",
     "Natural breath pauses mid-sentence",
     "Subtle alignment differences you are not confident about — only flag clear, obvious misalignment",
+    "Endcard text or logo that appears roughly centered — do NOT flag endcard branding as off-center unless it is clearly and visibly pushed to one side (more than ~15% of frame width off-axis). Slight perceived offsets in roughly-centered endcard text are not errors.",
+    "Endcard with music — if [AUDIO METADATA] shows Endcard audio present = YES, do NOT flag the endcard for missing audio. Music is confirmed running. Only flag endcard audio issues when [AUDIO METADATA] shows Endcard audio present = NO.",
+    "Intentional creative decisions — do NOT flag background elements, props in frame, unusual camera angles, visible on-screen content (websites, browser tabs, app screens), talent handling objects in unexpected orientations, or stylistic cuts. EXCEPTION: this exemption does NOT apply when a visual effect, color overlay, animation, or transition actively covers and obscures the main content (sign text, talent face, product being shown, on-screen text). If the primary subject or readable content is blocked by an overlay or animation effect — even briefly — flag it as a glitch or visual obstruction. The test is: does the viewer lose access to content they were meant to see? If yes, flag it.",
+    "VO pronunciation — do NOT flag brand name, product name, or any other pronunciation as incorrect. Whisper (the transcription model) mishears brand names consistently. The talent's pronunciation is almost always correct. Never create a pronunciation issue.",
     "Caption split typos, caption-VO mismatches, caption typos, spelling errors in captions, or ANY caption text content — these are exclusively handled by the Captions agent. Never flag caption content under Overlays, Video, or any other category",
     "Duplicate captions of any kind — NEVER flag. This check is fully disabled across all agents",
     "Two lines of a single caption — completely normal, never flag",
     "Any caption-related issue under Overlays or Video — captions are exclusively the Captions agent's job",
+    "Endcard animation frames — if a white or colored frame in the last 5 seconds already contains brand elements actively appearing (logo animating in, brand name building, motion graphics starting), it IS the endcard animation — do NOT flag as a glitch or white screen. However, if a frame in the last 5 seconds is completely blank (pure white or black with zero text, zero logo, zero animation) and the endcard animation only starts in the NEXT frame, that blank frame IS a real issue and should be flagged as a glitch.",
+    "If you determine something is intentional or not a real production error — do NOT include it in the issues list at all. Do not add an issue and then explain it away in the description. Simply omit it. EXCEPTION: sign/prop text that is not fully readable due to any overlay or effect must always be flagged — intentionality is irrelevant for this check.",
     "Anything you cannot confirm from the frames or audio data — do not flag based on assumption or inference"
   ]
 }

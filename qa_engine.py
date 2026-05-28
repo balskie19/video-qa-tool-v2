@@ -75,22 +75,34 @@ async def run_qa_analysis(url: Optional[str] = None, file=None, context: Optiona
             loop.run_in_executor(None, lambda: extract_audio(video_path, tmp_dir)),
         )
 
-        # ── Step 3: Audio analysis + transcription + caption extraction all in parallel ──
+        # ── Step 3: Audio analysis + transcription + caption extraction + endcard audio + scene cuts all in parallel ──
         yield {"type": "progress", "step": "Analyzing audio, transcribing, reading captions...", "percent": 30}
+        _dur = video_info["duration"]
         results = await asyncio.gather(
             loop.run_in_executor(None, lambda: analyze_audio(audio_path)),
             loop.run_in_executor(None, lambda: transcribe_audio(audio_path)),
             loop.run_in_executor(None, lambda: extract_captions(video_path, tmp_dir)),
+            loop.run_in_executor(None, lambda: analyze_audio_levels(audio_path, _dur)),
+            loop.run_in_executor(None, lambda: detect_scene_cuts(video_path)),
             return_exceptions=True,
         )
-        audio_data = results[0] if not isinstance(results[0], Exception) else {"dead_air": [], "music_gaps": [], "crackling_flag": False, "inconsistency_flag": False}
-        transcript = results[1] if not isinstance(results[1], Exception) else {"full_text": "", "segments": []}
-        captions   = results[2] if not isinstance(results[2], Exception) else {"found": False, "entries": []}
+        audio_data   = results[0] if not isinstance(results[0], Exception) else {"dead_air": [], "music_gaps": [], "crackling_flag": False, "inconsistency_flag": False}
+        transcript   = results[1] if not isinstance(results[1], Exception) else {"full_text": "", "segments": []}
+        captions     = results[2] if not isinstance(results[2], Exception) else {"found": False, "entries": []}
+        audio_levels = results[3] if not isinstance(results[3], Exception) else None
+        scene_cuts   = results[4] if not isinstance(results[4], Exception) else []
 
         # ── Step 4: Caption split detection ──
         yield {"type": "progress", "step": "Checking captions...", "percent": 58}
         split_errors = await loop.run_in_executor(None, lambda: detect_caption_split_errors(captions))
-        if not captions.get("found"):
+
+        # Detect sign-based UGC ads early — no VO + no embedded SRT
+        # Sign-based videos get the OCR pass skipped: the bottom strips would contain sign text,
+        # not real captions, so running OCR would pollute split_errors with false data.
+        transcript_words = len((transcript.get("full_text") or "").split())
+        is_sign_based = transcript_words <= 5 and not captions.get("found")
+
+        if not captions.get("found") and not is_sign_based:
             # No embedded SRT — run OCR-based burned-in caption reading
             caption_strips = await loop.run_in_executor(
                 None, lambda: extract_caption_strips(tmp_dir, video_info["duration"], fps_val)
@@ -104,7 +116,22 @@ async def run_qa_analysis(url: Optional[str] = None, file=None, context: Optiona
 
         # ── Step 5: AI analysis ──
         yield {"type": "progress", "step": "Running AI analysis...", "percent": 74}
-        report = await analyze_with_ai(frames, audio_data, transcript, captions, video_info, split_errors, context=context)
+
+        # Inject sign-based context note so the visual agent focuses on sign readability + branding
+        if is_sign_based:
+            sign_note = (
+                "NOTE: This appears to be a SIGN-BASED UGC AD — the talent holds physical signs with handwritten text. "
+                "Almost no spoken VO was detected. Your visual analysis MUST specifically check: "
+                "(1) Is the text on every sign fully readable in every frame it appears? "
+                "If a dark overlay, animation, or transition covers any part of the sign text — flag it. "
+                "(2) Is there a client logo, branded graphic, or branded endcard screen anywhere in the video? "
+                "Handwritten text on a physical prop does NOT count as branding. If no brand identifier exists — flag it."
+            )
+            auto_context = sign_note if not context else f"{context}\n\n{sign_note}"
+        else:
+            auto_context = context
+
+        report = await analyze_with_ai(frames, audio_data, transcript, captions, video_info, split_errors, context=auto_context, audio_levels=audio_levels, scene_cuts=scene_cuts)
         report["filename"] = video_filename
         report["duration"] = round(video_info["duration"])
 
@@ -316,7 +343,7 @@ def _download_replay_playwright(url: str, tmp_dir: str) -> tuple:
 def get_video_info(video_path: str) -> dict:
     cmd = ["ffprobe", "-v", "quiet", "-print_format", "json",
            "-show_streams", "-show_format", video_path]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     data = json.loads(r.stdout)
     duration = float(data["format"].get("duration", 0))
     w = h = 0
@@ -395,7 +422,7 @@ def analyze_audio(audio_path: str) -> dict:
     from concurrent.futures import ThreadPoolExecutor
 
     def _run(args):
-        return subprocess.run(args, capture_output=True, text=True)
+        return subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
     # Run all 3 core passes in parallel
     with ThreadPoolExecutor(max_workers=3) as ex:
@@ -444,7 +471,7 @@ def analyze_audio(audio_path: str) -> dict:
         ln_r = subprocess.run(
             ["ffmpeg", "-i", audio_path, "-af", "loudnorm=print_format=json",
              "-f", "null", "-", "-loglevel", "info"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
         )
         jm = re.search(r"\{[\s\S]+?\}", ln_r.stderr)
         if jm:
@@ -474,7 +501,7 @@ def analyze_audio(audio_path: str) -> dict:
                     r = subprocess.run(
                         ["ffmpeg", "-ss", str(start), "-t", str(duration), "-i", audio_path,
                          "-af", "volumedetect", "-f", "null", "-", "-loglevel", "info"],
-                        capture_output=True, text=True,
+                        capture_output=True, text=True, encoding="utf-8", errors="replace",
                     )
                     m = re.search(r"mean_volume: ([-\d.]+) dB", r.stderr)
                     return float(m.group(1)) if m else None
@@ -483,7 +510,7 @@ def analyze_audio(audio_path: str) -> dict:
                     f2 = ex.submit(_section_mean, half, half)
                     mean_first, mean_second = f1.result(), f2.result()
                 if mean_first is not None and mean_second is not None:
-                    if abs(mean_first - mean_second) >= 8:
+                    if abs(mean_first - mean_second) >= 14:
                         inconsistency_flag = True
     except Exception:
         pass
@@ -499,6 +526,75 @@ def analyze_audio(audio_path: str) -> dict:
         "crackling_flag":     crackling_flag,
         "inconsistency_flag": inconsistency_flag,
     }
+
+
+def analyze_audio_levels(audio_path: str, video_duration: float) -> dict:
+    """
+    Run ffmpeg volumedetect on the full audio and on the endcard section (last 5s).
+    Returns has_audio, endcard_has_audio, mean_db_overall, mean_db_endcard.
+    Mean volume above -50 dB = audio present.
+    """
+    SILENCE_THRESHOLD_DB = -50.0
+
+    def _vol(path: str, start: float = None, duration: float = None) -> float:
+        cmd = ["ffmpeg", "-hide_banner", "-loglevel", "info"]
+        if start is not None:
+            cmd += ["-ss", str(start)]
+        if duration is not None:
+            cmd += ["-t", str(duration)]
+        cmd += ["-i", path, "-af", "volumedetect", "-f", "null", "-"]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15)
+            m = re.search(r"mean_volume:\s*([-\d.]+)\s*dB", r.stderr)
+            return float(m.group(1)) if m else -99.0
+        except Exception:
+            return -99.0
+
+    endcard_start = max(0.0, video_duration - 5.0)
+    endcard_dur   = min(5.0, video_duration)
+
+    mean_overall  = _vol(str(audio_path))
+    mean_endcard  = _vol(str(audio_path), start=endcard_start, duration=endcard_dur)
+
+    return {
+        "has_audio":        mean_overall > SILENCE_THRESHOLD_DB,
+        "endcard_has_audio": mean_endcard > SILENCE_THRESHOLD_DB,
+        "mean_db_overall":  round(mean_overall, 1),
+        "mean_db_endcard":  round(mean_endcard, 1),
+    }
+
+
+def detect_scene_cuts(video_path: str) -> list:
+    """
+    Use PySceneDetect to find all hard cuts in the video.
+    Returns list of {timecode, time_s, score} dicts sorted by time.
+    Falls back to empty list on any error.
+    """
+    try:
+        from scenedetect import open_video, SceneManager
+        from scenedetect.detectors import ContentDetector
+
+        video = open_video(video_path)
+        manager = SceneManager()
+        manager.add_detector(ContentDetector(threshold=27.0))
+        manager.detect_scenes(video, show_progress=False)
+        scene_list = manager.get_scene_list()
+
+        cuts = []
+        for i, (start, end) in enumerate(scene_list):
+            if i == 0:
+                continue  # skip very first scene boundary at t=0
+            ts = start.get_seconds()
+            m, s = int(ts // 60), int(ts % 60)
+            cuts.append({
+                "timecode": f"{m}:{s:02d}",
+                "time_s": round(ts, 2),
+                "score": 0.0,  # score not available in v0.7 without stats file
+            })
+        return cuts
+    except Exception as e:
+        print(f"[scene_cuts] failed: {e}", flush=True)
+        return []
 
 
 def transcribe_audio(audio_path: str) -> dict:
@@ -878,6 +974,70 @@ def detect_duplicate_captions(frames_dir: str, fps_val: float) -> list:
     return duplicates
 
 
+def _srt_to_sec(ts: str) -> float:
+    """Convert SRT timestamp '00:00:21,000' to seconds float."""
+    try:
+        ts = ts.replace(",", ".")
+        parts = ts.split(":")
+        return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+    except Exception:
+        return 0.0
+
+
+def _align_captions_transcript(captions: dict, transcript: dict) -> list:
+    """
+    Align every embedded SRT caption line with the Whisper transcript text
+    for the same time window.  Returns a list of dicts:
+      { timestamp, caption_text, transcript_text, has_diff }
+    has_diff = True when words (>3 chars) differ between the two texts.
+    Used to inject a side-by-side diff into the AI prompt so mismatches
+    are flagged even when a frame wasn't sampled at that moment.
+    """
+    if not captions.get("found") or not captions.get("entries"):
+        return []
+    segments = transcript.get("segments", [])
+    if not segments:
+        return []
+
+    aligned = []
+    for entry in captions["entries"]:
+        cap_start = _srt_to_sec(entry["start"])
+        cap_end   = _srt_to_sec(entry["end"])
+        cap_text  = entry["text"].strip()
+        if not cap_text:
+            continue
+
+        # Collect transcript segments that overlap this caption window (+/- 1.5s tolerance)
+        overlap = []
+        for seg in segments:
+            if seg["start"] < cap_end + 1.5 and seg["end"] > cap_start - 1.5:
+                overlap.append(seg["text"].strip())
+        tx_text = " ".join(overlap).strip() if overlap else ""
+
+        # Simple word-level diff — ignore short/stop words, detect meaningful differences
+        cap_words = set(
+            w.lower().strip(".,!?-'\"")
+            for w in re.findall(r"\b\w+\b", cap_text)
+            if len(w) > 3
+        )
+        tx_words = set(
+            w.lower().strip(".,!?-'\"")
+            for w in re.findall(r"\b\w+\b", tx_text)
+            if len(w) > 3
+        )
+        has_diff = bool(tx_text) and bool(cap_words.symmetric_difference(tx_words))
+
+        m_min, m_sec = int(cap_start // 60), int(cap_start % 60)
+        aligned.append({
+            "timestamp":       f"{m_min}:{m_sec:02d}",
+            "caption_text":    cap_text,
+            "transcript_text": tx_text,
+            "has_diff":        has_diff,
+        })
+
+    return aligned
+
+
 def detect_splits_from_caption_list(caption_list: list) -> list:
     """
     Takes AI-read caption list [{ts, text}, ...] and detects split errors
@@ -968,8 +1128,8 @@ def _format_checklist(data: dict) -> str:
 # AI ANALYSIS — TWO PARALLEL AGENTS
 # ─────────────────────────────────────────────────────────
 
-async def analyze_with_ai(frames, audio_data, transcript, captions, video_info, split_errors=None, dup_captions=None, context: Optional[str] = None) -> dict:
-    audio_ctx = _build_audio_context(audio_data, transcript, captions, split_errors or [], dup_captions or [])
+async def analyze_with_ai(frames, audio_data, transcript, captions, video_info, split_errors=None, dup_captions=None, context: Optional[str] = None, audio_levels: Optional[dict] = None, scene_cuts: Optional[list] = None) -> dict:
+    audio_ctx = _build_audio_context(audio_data, transcript, captions, split_errors or [], dup_captions or [], audio_levels=audio_levels, video_duration=video_info.get("duration", 0), scene_cuts=scene_cuts or [])
     caption_cl = _load_checklist("captions")
     visual_cl  = _load_checklist("visual")
 
@@ -980,10 +1140,47 @@ async def analyze_with_ai(frames, audio_data, transcript, captions, video_info, 
         _visual_agent(frames, audio_ctx, video_info, visual_cl, context=context)
     )
 
-    captions_result, visual_result = await asyncio.gather(captions_task, visual_task)
+    captions_result, visual_result = await asyncio.gather(captions_task, visual_task, return_exceptions=True)
+
+    if isinstance(captions_result, Exception):
+        print(f"[ERROR] captions_agent failed: {captions_result}", flush=True)
+        captions_result = {"issues": [], "summary": "", "issue_count": 0}
+    if isinstance(visual_result, Exception):
+        print(f"[ERROR] visual_agent failed: {visual_result}", flush=True)
+        visual_result = {"issues": [], "summary": "", "issue_count": 0}
 
     all_issues = captions_result.get("issues", []) + visual_result.get("issues", [])
     all_issues.sort(key=lambda x: {"Critical": 0, "Major": 1, "Minor": 2}.get(x.get("severity", "Minor"), 2))
+
+    # Deduplicate: both agents sometimes flag the same underlying problem independently.
+    # Fingerprint each issue by its meaningful title keywords + timestamp bucket.
+    # Keep only the first (highest-severity) occurrence of each fingerprint.
+    _GENERIC = {"audio", "video", "caption", "overlay", "screen", "frame",
+                "missing", "absent", "present", "issue", "error", "check"}
+
+    def _fp(issue: dict) -> tuple:
+        # Use 5-char stems so "brand" and "branding" both hash to "brand"
+        words = frozenset(
+            w.strip(".,!?-").lower()[:5] for w in issue.get("issue", "").split()
+            if len(w.strip(".,!?-")) > 3 and w.strip(".,!?-").lower() not in _GENERIC
+        )
+        ts = issue.get("timestamp", "").lower()
+        # "end" and "throughout" are both global scope — same dedup bucket
+        bucket = "global" if ("throughout" in ts or ts.strip() == "end") else ts[:4]
+        return words, bucket
+
+    seen_fps: list = []
+    deduped: list = []
+    for issue in all_issues:
+        fp_words, fp_ts = _fp(issue)
+        is_dup = any(
+            fp_ts == s_ts and len(fp_words) > 0 and len(fp_words & s_words) >= 1
+            for s_words, s_ts in seen_fps
+        )
+        if not is_dup:
+            seen_fps.append((fp_words, fp_ts))
+            deduped.append(issue)
+    all_issues = deduped
 
     total = len(all_issues)
     if total == 0:
@@ -1060,6 +1257,19 @@ FRAMES: {len(frames)} frames (~{duration / max(len(frames), 1):.1f}s apart). Ins
 
 {checklist_text}
 
+── MANDATORY PRE-CHECK BEFORE WRITING ISSUES ──
+Before filling in the issues array, answer these two questions internally:
+
+1. SIGN CHECK: Does any frame show a person holding a physical sign, card, or paper with text?
+   If YES — go through every such frame and ask: "Can I read ALL the text on this sign right now?"
+   Any frame where the answer is NO (text covered, cut off, or obscured by a dark/colored overlay or animation) MUST appear as an issue.
+   Do not skip this because the overlay looks like a transition or animation style. If text is unreadable = flag it, no exceptions.
+
+2. BRANDING CHECK: Does a client logo, brand name (as a graphic or styled text — not handwritten on a prop), or branded endcard screen appear anywhere in the video?
+   If NO brand identifier appears at any point = flag as "Branding absent."
+
+Only after completing both pre-checks, write your issues array.
+
 PLAIN LANGUAGE RULE: Write every issue description for a video editor, not a technician. Never include dB values, LUFS, True Peak, LRA, codec terms, or any raw audio measurements. Translate technical signals into what the editor hears or sees and what they need to fix. Example: instead of "True Peak=-0.82 dB indicates clipping", write "The audio is too loud and will distort on most devices — reduce the volume."
 
 RETURN VALID JSON ONLY — no preamble, no markdown fences:
@@ -1095,7 +1305,12 @@ async def _call_ai(content: list) -> dict:
             max_tokens=4096,
         ),
     )
-    raw = resp.choices[0].message.content.strip()
+    if not resp or not resp.choices:
+        return {"issues": [], "summary": "AI returned no response.", "issue_count": 0}
+    raw = resp.choices[0].message.content
+    if not raw:
+        return {"issues": [], "summary": "AI returned empty content.", "issue_count": 0}
+    raw = raw.strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
     try:
@@ -1104,8 +1319,22 @@ async def _call_ai(content: list) -> dict:
         return {"issues": [], "summary": "JSON parse error.", "raw": raw, "issue_count": 0}
 
 
-def _build_audio_context(audio_data: dict, transcript: dict, captions: dict, split_errors: list = None, dup_captions: list = None) -> str:
+def _build_audio_context(audio_data: dict, transcript: dict, captions: dict, split_errors: list = None, dup_captions: list = None, audio_levels: Optional[dict] = None, video_duration: float = 0, scene_cuts: list = None) -> str:
     lines = ["── AUDIO DATA ──"]
+
+    # Inject endcard audio metadata so AI doesn't false-flag endcard music absence
+    if audio_levels is not None:
+        lines.append(
+            f"[AUDIO METADATA] Overall audio present: {'YES' if audio_levels['has_audio'] else 'NO'} "
+            f"(mean {audio_levels['mean_db_overall']} dB)  |  "
+            f"Endcard audio present: {'YES' if audio_levels['endcard_has_audio'] else 'NO'} "
+            f"(mean {audio_levels['mean_db_endcard']} dB)"
+        )
+        lines.append(
+            "Note: 'audio present' = any signal (VO + music + ambient). "
+            "If Endcard audio present = YES, background music is running during the endcard — "
+            "do NOT flag the endcard for missing audio."
+        )
 
     if audio_data.get("mean_db") is not None:
         lines.append(f"Mean volume: {audio_data['mean_db']} dB  |  Max: {audio_data['max_db']} dB")
@@ -1124,27 +1353,32 @@ def _build_audio_context(audio_data: dict, transcript: dict, captions: dict, spl
     music_gaps = audio_data.get("music_gaps", [])
 
     if dead_air:
+        # Filter out end-of-video dead air (last 3s) — natural pacing, not an error
+        eov_cutoff = max(0, video_duration - 3.0) if video_duration > 6 else 0
+        dead_air_filtered = [g for g in dead_air if eov_cutoff == 0 or g["start"] < eov_cutoff]
+
         # Merge consecutive dead air gaps within 2 seconds of each other into one entry
         merged_dead_air = []
-        for gap in sorted(dead_air, key=lambda x: x["start"]):
+        for gap in sorted(dead_air_filtered, key=lambda x: x["start"]):
             if merged_dead_air and gap["start"] - merged_dead_air[-1]["end"] <= 2.0:
                 merged_dead_air[-1]["end"] = max(merged_dead_air[-1]["end"], gap["end"])
                 merged_dead_air[-1]["duration"] = round(merged_dead_air[-1]["end"] - merged_dead_air[-1]["start"], 2)
             else:
                 merged_dead_air.append(dict(gap))
-        lines.append(f"DEAD AIR (truly silent — no voice, no music) [{len(merged_dead_air)} gap(s) — report each as ONE issue]:")
-        for s in merged_dead_air[:20]:
-            lines.append(f"  {s['start']}s - {s['end']}s  ({s['duration']}s)  <-- FLAG THIS as ONE issue")
+        if merged_dead_air:
+            lines.append(f"DEAD AIR (truly silent — no voice, no music) [{len(merged_dead_air)} gap(s) — report each as ONE issue]:")
+            for s in merged_dead_air[:20]:
+                lines.append(f"  {s['start']}s - {s['end']}s  ({s['duration']}s)  <-- FLAG THIS as ONE issue")
 
     if music_gaps:
-        long_gaps = [s for s in music_gaps if s["duration"] >= 0.5]
-        short_gaps = [s for s in music_gaps if s["duration"] < 0.5]
+        long_gaps  = [s for s in music_gaps if s["duration"] >= 2.0]
+        short_gaps = [s for s in music_gaps if s["duration"] < 2.0]
         if long_gaps:
-            lines.append(f"INTER-SENTENCE PAUSES (voice stops, music present, >=0.5s — FLAG EVERY ONE) [{len(long_gaps)} gap(s)]:")
+            lines.append(f"INTER-SENTENCE PAUSES (voice stops, music present, >=2.0s — FLAG EVERY ONE) [{len(long_gaps)} gap(s)]:")
             for s in long_gaps[:20]:
                 lines.append(f"  {s['start']}s - {s['end']}s  ({s['duration']}s)  <-- FLAG THIS")
         if short_gaps:
-            lines.append(f"SHORT MUSIC GAPS (<0.5s — do NOT flag) [{len(short_gaps)} gap(s)]:")
+            lines.append(f"SHORT PAUSES (<2.0s — do NOT flag, natural speech pacing) [{len(short_gaps)} gap(s)]:")
             for s in short_gaps[:10]:
                 lines.append(f"  {s['start']}s - {s['end']}s  ({s['duration']}s)")
 
@@ -1153,9 +1387,24 @@ def _build_audio_context(audio_data: dict, transcript: dict, captions: dict, spl
         lines.append(f"  [{seg['start']}s-{seg['end']}s]  {seg['text']}")
 
     if captions.get("found"):
-        lines.append("\n── EMBEDDED CAPTIONS (what appears on screen) ──")
-        for e in captions["entries"][:80]:
-            lines.append(f"  [{e['start']}]  {e['text']}")
+        aligned = _align_captions_transcript(captions, transcript)
+        if aligned:
+            diff_count = sum(1 for a in aligned if a["has_diff"])
+            lines.append(f"\n── CAPTION vs TRANSCRIPT ALIGNMENT ({len(aligned)} lines, {diff_count} with word differences) ──")
+            lines.append("Caption text shown alongside the matching transcript text for that moment.")
+            lines.append("Lines marked ← DIFF have word differences — review those for real mismatches.")
+            lines.append("RULES: Skip brand names, product names, technical/specialized terms — Whisper mishears those. Only flag common everyday words where meaning is clearly wrong.")
+            for item in aligned[:80]:
+                diff_marker = "  ← DIFF" if item["has_diff"] else ""
+                lines.append(
+                    f"  [{item['timestamp']}] "
+                    f"Caption: \"{item['caption_text']}\"  |  "
+                    f"Transcript: \"{item['transcript_text']}\"{diff_marker}"
+                )
+        else:
+            lines.append("\n── EMBEDDED CAPTIONS (what appears on screen) ──")
+            for e in captions["entries"][:80]:
+                lines.append(f"  [{e['start']}]  {e['text']}")
     else:
         lines.append(
             "\n── CAPTIONS: None embedded — "
@@ -1169,5 +1418,12 @@ def _build_audio_context(audio_data: dict, transcript: dict, captions: dict, spl
                 f"  [{e['timestamp']}]  '{e['line_a']}'  -->  '{e['line_b']}'  "
                 f"(word '{e['duplicate_word']}' duplicated across split)"
             )
+
+    if scene_cuts:
+        lines.append(f"\n── SCENE CUTS DETECTED BY SCENEDETECT ({len(scene_cuts)} cuts) ──")
+        lines.append("These are the ONLY confirmed hard cuts in this video. Use this list when evaluating jump cuts.")
+        lines.append("A cut is only worth flagging if it is jarring, disorienting, or clearly unintentional — not just because it exists.")
+        for c in scene_cuts[:30]:
+            lines.append(f"  {c['timecode']}")
 
     return "\n".join(lines)
