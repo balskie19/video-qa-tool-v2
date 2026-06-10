@@ -337,6 +337,117 @@ def _download_replay_playwright(url: str, tmp_dir: str) -> tuple:
 
 
 # ─────────────────────────────────────────────────────────
+# REPLAY COMMENT SCRAPING
+# ─────────────────────────────────────────────────────────
+
+def fetch_replay_comments(url: str) -> str:
+    """
+    Navigate to a Dropbox Replay URL with Playwright and return raw comment text
+    scraped from the page. Caller passes this to AI for structuring.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        raise RuntimeError("Playwright not installed. Run: pip install playwright && python -m playwright install chromium")
+
+    raw_text = ""
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-blink-features=AutomationControlled",
+            ],
+        )
+        ctx = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            viewport={"width": 1280, "height": 900},
+            locale="en-US",
+        )
+        ctx.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        page = ctx.new_page()
+
+        try:
+            page.goto(url, wait_until="load", timeout=30_000)
+            # Wait for comments panel to populate
+            page.wait_for_timeout(5_000)
+
+            # Try to get just the comments sidebar text — Dropbox Replay renders a right panel
+            # Try common containers; fall back to full body text
+            sidebar_text = None
+            for selector in [
+                "[class*='Comment']",
+                "[class*='comment']",
+                "[data-testid*='comment']",
+                "[class*='Sidebar']",
+                "[class*='sidebar']",
+                "[class*='Panel']",
+            ]:
+                try:
+                    els = page.query_selector_all(selector)
+                    if els:
+                        sidebar_text = "\n".join(el.inner_text() for el in els if el.inner_text().strip())
+                        if sidebar_text.strip():
+                            break
+                except Exception:
+                    continue
+
+            raw_text = sidebar_text if sidebar_text and sidebar_text.strip() else page.inner_text("body")
+        except Exception as e:
+            raw_text = f"[PAGE LOAD ERROR: {e}]"
+        finally:
+            browser.close()
+
+    return raw_text
+
+
+def summarize_replay_comments(raw_text: str) -> dict:
+    """
+    Pass scraped Replay page text to AI. Returns {comments: [...], summary: str, action_items: [...]}.
+    """
+    ai_client = OpenAI(
+        api_key=OPENROUTER_API_KEY,
+        base_url="https://openrouter.ai/api/v1",
+    )
+
+    system = (
+        "You are a video production assistant. You will receive raw text scraped from a Dropbox Replay video review page. "
+        "Your job is to:\n"
+        "1. Extract every comment left by reviewers — each comment has a timestamp (format like 0:01.802 or 0:30), "
+        "   an author name, and comment text. Some comments are replies to others.\n"
+        "2. Produce a clean numbered action-item list of what the editor needs to fix or decide on.\n\n"
+        "Output a JSON object with these fields:\n"
+        "  comments: array of {timestamp, author, text} — all comments found, in order\n"
+        "  action_items: array of strings — numbered list of editor actions derived from the comments\n"
+        "  summary: one sentence summarizing what kind of feedback was left\n\n"
+        "If no comments are found, return comments=[], action_items=[], summary='No comments found.'\n"
+        "Return only valid JSON."
+    )
+
+    try:
+        resp = ai_client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": f"RAW PAGE TEXT:\n\n{raw_text[:8000]}"},
+            ],
+            max_tokens=1024,
+            temperature=0,
+        )
+        content = resp.choices[0].message.content.strip()
+        # Strip markdown fences if present
+        content = re.sub(r"^```(?:json)?\s*", "", content)
+        content = re.sub(r"\s*```$", "", content)
+        return json.loads(content)
+    except Exception as e:
+        return {"comments": [], "action_items": [], "summary": f"AI parse error: {e}"}
+
+
+# ─────────────────────────────────────────────────────────
 # VIDEO PROCESSING
 # ─────────────────────────────────────────────────────────
 

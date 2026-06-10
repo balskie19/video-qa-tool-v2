@@ -184,6 +184,37 @@ async def analyze_video(
     )
 
 
+@app.post("/replay-comments")
+async def replay_comments(request: Request, url: str = Form(...)):
+    if not _is_authenticated(request):
+        return Response(status_code=401, content="Unauthorized")
+
+    async def generate():
+        try:
+            from qa_engine import fetch_replay_comments, summarize_replay_comments
+            yield f"data: {json.dumps({'type': 'progress', 'message': 'Loading Replay page...'})}\n\n"
+            await asyncio.sleep(0)
+
+            loop = asyncio.get_event_loop()
+            raw = await loop.run_in_executor(None, lambda: fetch_replay_comments(url))
+
+            yield f"data: {json.dumps({'type': 'progress', 'message': 'Extracting comments...'})}\n\n"
+            await asyncio.sleep(0)
+
+            result = await loop.run_in_executor(None, lambda: summarize_replay_comments(raw))
+            yield f"data: {json.dumps({'type': 'complete', 'result': result})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        finally:
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

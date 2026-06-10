@@ -45,6 +45,7 @@
       <div class="tabs" role="tablist" aria-label="Input method">
         <button class="tab active" role="tab" aria-selected="true" aria-controls="panel-url" data-tab="url">Dropbox Links</button>
         <button class="tab" role="tab" aria-selected="false" aria-controls="panel-upload" data-tab="upload">Upload Files</button>
+        <button class="tab" role="tab" aria-selected="false" aria-controls="panel-comments" data-tab="comments">Review Comments</button>
       </div>
 
       <!-- URL Panel -->
@@ -61,6 +62,24 @@
         <button class="btn-add-row" id="btn-add-file" type="button">
           <span aria-hidden="true">+</span> Add Another File
         </button>
+      </div>
+
+      <!-- Review Comments Panel -->
+      <div class="tab-panel hidden" id="panel-comments" role="tabpanel">
+        <div class="comment-url-row">
+          <input
+            type="url"
+            id="comment-url-input"
+            class="comment-url-field"
+            placeholder="Paste Dropbox Replay link..."
+            spellcheck="false"
+          />
+        </div>
+        <button class="btn-analyze" id="btn-fetch-comments" type="button" style="margin-top:12px;">
+          <span class="btn-label">Fetch Comments</span>
+          <span class="btn-spinner" aria-hidden="true"></span>
+        </button>
+        <div id="comments-result" class="comments-result hidden"></div>
       </div>
 
       <!-- Context Input -->

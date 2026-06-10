@@ -46,6 +46,8 @@ scriptToggle.addEventListener("click", () => {
 
 
 // ─── Tabs ─────────────────────────────────────────────────
+const panelComments = document.getElementById("panel-comments");
+
 tabs.forEach(tab => {
   tab.addEventListener("click", () => {
     activeTab = tab.dataset.tab;
@@ -55,6 +57,10 @@ tabs.forEach(tab => {
     });
     panelUrl.classList.toggle("hidden", activeTab !== "url");
     panelUpload.classList.toggle("hidden", activeTab !== "upload");
+    if (panelComments) panelComments.classList.toggle("hidden", activeTab !== "comments");
+    // Hide main analyze button and script section when on comments tab
+    btnAnalyze.classList.toggle("hidden", activeTab === "comments");
+    document.querySelector(".script-section").classList.toggle("hidden", activeTab === "comments");
   });
 });
 
@@ -630,6 +636,103 @@ btnReset.addEventListener("click", () => {
   if (old) old.remove();
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
+
+
+// ─── Review Comments ──────────────────────────────────────
+const btnFetchComments  = document.getElementById("btn-fetch-comments");
+const commentUrlInput   = document.getElementById("comment-url-input");
+const commentsResult    = document.getElementById("comments-result");
+
+if (btnFetchComments) {
+  btnFetchComments.addEventListener("click", async () => {
+    const url = commentUrlInput?.value?.trim();
+    if (!url) { commentUrlInput.focus(); return; }
+
+    // Loading state
+    btnFetchComments.disabled = true;
+    btnFetchComments.setAttribute("aria-busy", "true");
+    btnFetchComments.querySelector(".btn-label").textContent = "Fetching...";
+    commentsResult.classList.add("hidden");
+    commentsResult.innerHTML = "";
+
+    try {
+      const fd = new FormData();
+      fd.append("url", url);
+      const resp = await fetch("/replay-comments", { method: "POST", body: fd });
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let result = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const evt = JSON.parse(line.slice(5).trim());
+          if (evt.type === "progress") {
+            btnFetchComments.querySelector(".btn-label").textContent = evt.message || "Working...";
+          } else if (evt.type === "complete") {
+            result = evt.result;
+          } else if (evt.type === "error") {
+            commentsResult.innerHTML = `<p style="color:var(--error,#f55)">Error: ${esc(evt.message)}</p>`;
+            commentsResult.classList.remove("hidden");
+          }
+        }
+      }
+
+      if (result) renderCommentsResult(result);
+    } catch (err) {
+      commentsResult.innerHTML = `<p style="color:var(--error,#f55)">Error: ${esc(String(err))}</p>`;
+      commentsResult.classList.remove("hidden");
+    } finally {
+      btnFetchComments.disabled = false;
+      btnFetchComments.removeAttribute("aria-busy");
+      btnFetchComments.querySelector(".btn-label").textContent = "Fetch Comments";
+    }
+  });
+}
+
+function renderCommentsResult(result) {
+  const actions = result.action_items || [];
+  const comments = result.comments || [];
+  const summary = result.summary || "";
+
+  let html = "";
+
+  if (summary) {
+    html += `<p class="comments-summary">${esc(summary)}</p>`;
+  }
+
+  if (actions.length) {
+    html += `<ol class="comments-action-list">`;
+    actions.forEach((item, i) => {
+      html += `<li class="comments-action-item"><span class="comments-action-num">${i + 1}.</span>${esc(item)}</li>`;
+    });
+    html += `</ol>`;
+  } else {
+    html += `<p style="color:var(--muted);font-size:13px;">No action items found.</p>`;
+  }
+
+  if (comments.length) {
+    html += `<div class="comments-raw-list">
+      <div class="comments-raw-title">All Comments (${comments.length})</div>`;
+    comments.forEach(c => {
+      html += `<div class="comment-chip">
+        <span class="comment-ts">${esc(c.timestamp || "—")}</span>
+        <span class="comment-author">${esc(c.author || "")}</span>
+        <span class="comment-text">${esc(c.text || "")}</span>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  commentsResult.innerHTML = html;
+  commentsResult.classList.remove("hidden");
+}
 
 
 // ─── Init ────────────────────────────────────────────────
